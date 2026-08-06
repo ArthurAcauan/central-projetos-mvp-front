@@ -24,31 +24,33 @@ Objetivo: sair do esqueleto para um app que roda, com verificação automática 
   *Referência:* `prototype/**/src/components/Sidebar.tsx` e o rodapé "Rodrigo Almeida · Gerente" nos prints.
   *Fora do plano, a pedido:* `.gitattributes` corrigindo falha pré-existente de `format:check` (ver [L-003](LESSONS.md)).
 
-- [ ] **F0-3 — Cliente HTTP base**
+- [x] **F0-3 — Cliente HTTP base**
   `src/services/http.ts` com `baseURL` vindo de `VITE_API_URL`, tratamento de erro padronizado, `.env.example` versionado.
-  *Pronto quando:* um serviço consegue fazer uma chamada e o erro chega tratado na UI.
+  *Verificado:* toda falha sai como `HttpError` com `kind` (`config`/`network`/`timeout`/`client`/`server`/`parse`) e `message` em pt-BR pronta para a tela; cancelamento por `signal` propaga o `AbortError` original. Consumido pela lista de projetos em F2-1.
 
 ## Fase 1 — Domínio e dados (base de todo o resto)
 
 Objetivo: tipos, regras e indicadores testados **antes** de qualquer tela depender deles.
 
-- [ ] **F1-1 — Tipos de domínio** — `src/types/`: `Project`, `Client`, `Team`, `User`, `ProjectStatus`, `UserRole` com os literais exatos do spec.
-  *Atenção:* `UserRole` já existe em `src/types/user.ts` desde F0-2. Expanda esse arquivo com a entidade `User`; não recrie o union em outro lugar.
+- [x] **F1-1 — Tipos de domínio** — `src/types/`: `Project`, `Client`, `Team`, `User`, `ProjectStatus`, `UserRole` com os literais exatos do spec.
+  *Verificado:* tudo em camelCase (ADR-0002), com `projectStatuses`/`projectStatusLabels` e `userRoles`/`userRoleLabels` como fonte única de ordem e rótulo. `UserRole` foi expandido no arquivo que já existia, não duplicado.
 
-- [ ] **F1-2 — Indicadores e regras (crítico)** — `src/domain/indicators.ts` + testes.
-  Funções: `budgetConsumptionPercent`, `isLate`, `isOverBudget`, `needsAttention`, e os agregados do dashboard.
-  *Cuidado obrigatório (ver [LESSONS](LESSONS.md)):* `budget = 0` não pode gerar `Infinity`/`NaN`; comparação de `deadline` em data local; `budget_spent > budget` **não** é erro de validação (RN03).
-  *Pronto quando:* testes cobrem RN01–RN06, os três indicadores derivados e os casos de borda acima.
+- [x] **F1-2 — Indicadores e regras (crítico)** — `src/domain/indicators.ts` e `src/domain/projectRules.ts` + testes.
+  Funções: `budgetConsumptionPercent`, `isLate`, `isOverBudget`, `needsAttention`, `summarizeProjects`, `projectsNeedingAttention`, `aggregateByClient`; validação RN01–RN06 em `projectRules.ts`.
+  *Verificado:* `budget = 0` devolve `null` (A-001); `deadline` comparado como data de calendário local, prazo igual a hoje não atrasa (A-002); estouro de orçamento é aviso, não erro (A-003). `parseCalendarDate`/`formatCalendarDate` centralizam a conversão de data.
 
-- [ ] **F1-3 — Serviços REST** — `src/services/{projects,clients,teams,users}.ts` + mapeamento do contrato (ver [ADR-0002](decisions/ADR-0002-contrato-de-dados-e-mapeamento.md)).
-  *Pronto quando:* nenhuma página conhece o formato do JSON da API.
+- [x] **F1-3 — Serviços REST** — `src/services/{projects,clients,teams,users}.ts` + mapeamento do contrato (ver [ADR-0002](decisions/ADR-0002-contrato-de-dados-e-mapeamento.md)).
+  *Verificado:* um `Dto` em `snake_case` e um par de mapeadores por recurso; `NUMERIC` como string é normalizado para número; nenhuma página conhece o formato do JSON.
 
-- [ ] **F1-4 — Dados mock** — camada de mock + seed fictício (~15 projetos cobrindo os 5 status, um atrasado, um com orçamento excedido, um com `budget = 0`).
-  *Pronto quando:* o front roda inteiro sem backend (ver [ADR-0001](decisions/ADR-0001-mock-primeiro.md)).
+- [x] **F1-4 — Dados mock** — camada de mock + seed fictício (15 projetos cobrindo os 5 status, um atrasado, um com orçamento excedido, um com `budget = 0`).
+  *Verificado:* o front roda sem backend (ADR-0001); `VITE_MOCK_SCENARIO` (`padrao`/`vazio`/`erro`) exercita os estados de tela, e a falha sai como `HttpError`, igual à API real. Prazos do seed são relativos a hoje, então o projeto atrasado continua atrasado sem manutenção.
 
 ## Fase 2 — Projetos (RF03, RF04, RF05, RF06)
 
-- [ ] **F2-1 — Lista de projetos (RF04)** — tabela com filtros por status e cliente, destaque visual para atrasado/em risco, estados de carregando/vazio/erro.
+- [x] **F2-1 — Lista de projetos (RF04)** — tabela com filtros por status e cliente, destaque visual para atrasado/em risco, estados de carregando/vazio/erro.
+  *Entregue:* `src/pages/ProjectsPage.tsx` (layout portado de `Projects.tsx` do protótipo), `src/hooks/useProjectsList.ts` (projetos + clientes + usuários em uma carga só), `src/domain/projectFilters.ts` (recorte puro, busca insensível a acento por projeto/cliente/gestor), `src/components/projects/StatusBadge.tsx` e `src/lib/format.ts` (moeda, data e percentual pt-BR — camada nova, registrada em [ADR-0005](decisions/ADR-0005-camada-lib-de-formatacao.md)).
+  *Verificado:* 23 testes novos — atraso e estouro destacados, prazo igual a hoje **não** marcado como atrasado, `budget = 0` exibido como "—", filtros combinados, recorte vazio distinguido de lista vazia, erro da API com "Tentar novamente". Todo indicador vem de `domain/indicators.ts`; a página não calcula nada.
+  *Fora desta fatia, de propósito:* botão "Novo projeto" (F2-3) e link para os detalhes (F2-2) — a linha ainda não é clicável.
 - [ ] **F2-2 — Detalhes do projeto (RF05)** — todos os campos + indicadores específicos do projeto.
 - [ ] **F2-3 — Cadastro de projeto (RF03)** — formulário com validação das regras RN01–RN06. `budget_spent > budget` passa com aviso, não com erro.
 - [ ] **F2-4 — Atualização de projeto (RF06)** — reaproveitar o formulário de F2-3.

@@ -19,6 +19,15 @@ export const projectStatuses: readonly ProjectStatus[] = [
   'CANCELADO',
 ];
 
+/**
+ * Confirma que um texto solto é um status válido. Serve para o valor cru de um
+ * `<select>`, que o DOM entrega como `string`: sem isto a única saída seria um
+ * `as ProjectStatus`, que silencia o compilador sem verificar nada.
+ */
+export function isProjectStatus(value: string): value is ProjectStatus {
+  return projectStatuses.some((status) => status === value);
+}
+
 /** Rótulos de exibição em pt-BR. */
 export const projectStatusLabels: Record<ProjectStatus, string> = {
   PLANEJAMENTO: 'Planejamento',

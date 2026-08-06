@@ -25,3 +25,4 @@ Não vale ADR para escolha de nome de variável, layout de tela ou detalhe de im
 | [0002](ADR-0002-contrato-de-dados-e-mapeamento.md) | Contrato de dados isolado em `services/` com mapeamento explícito | Aceito |
 | [0003](ADR-0003-ui-tailwind-em-vez-de-mui.md) | Tailwind CSS v4 como camada de UI, em vez de MUI | Aceito |
 | [0004](ADR-0004-refinamento-das-regras-de-negocio.md) | Refinamento das regras de negócio e requisitos (RN07–RN09, RF03, RNF03) | Aceito |
+| [0005](ADR-0005-camada-lib-de-formatacao.md) | Formatação pt-BR em `src/lib/`, separada de `domain/` | Aceito |

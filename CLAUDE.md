@@ -6,7 +6,7 @@ Comunicação: responda sempre em **português (pt-BR)**. Código, nomes de arqu
 
 ## Estado do repositório
 
-Este é o **frontend** de um MVP acadêmico de dois repositórios (Projeto Final II — "Plataforma de Centralização e Análise de Informações para Gestão de Projetos"). O scaffold (F0-1) está concluído; a aplicação em si começa em F0-2.
+Este é o **frontend** de um MVP acadêmico de dois repositórios (Projeto Final II — "Plataforma de Centralização e Análise de Informações para Gestão de Projetos"). Concluídas as fases 0 (fundação) e 1 (domínio, serviços e mock): o front roda sem backend. Em andamento a fase 2 (telas de projeto) — estado corrente sempre em [docs/BACKLOG.md](docs/BACKLOG.md).
 
 ## Comandos
 
@@ -83,6 +83,7 @@ Responsabilidade por camada — nenhuma página chama HTTP diretamente:
 - `components/` — apresentação reutilizável
 - `types/` — tipos de domínio
 - `routes/` — definição de rotas
+- `lib/` — utilitários de apresentação sem regra de negócio; hoje só `format.ts` (moeda, data e percentual pt-BR). Formatar não é decidir: `domain/` decide, `lib/` só formata o que já foi decidido ([ADR-0005](docs/decisions/ADR-0005-camada-lib-de-formatacao.md))
 
 Indicadores derivados **nunca são persistidos** — são calculados a partir dos campos do projeto. O cálculo vive **só** em `src/domain/indicators.ts`, para que dashboard, lista e detalhes nunca discordem. Duplicar cálculo é motivo de rejeição no Definition of Done.
 

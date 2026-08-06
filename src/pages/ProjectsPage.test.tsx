@@ -1,5 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { render as rtlRender, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatCalendarDate } from '@/domain/indicators';
 import ProjectsPage from '@/pages/ProjectsPage';
@@ -111,6 +112,11 @@ function mockData(projects: Project[]) {
   vi.mocked(listUsers).mockResolvedValue(users);
 }
 
+/** A tela tem links para os detalhes (F2-2), então precisa de Router. */
+function render(ui: React.ReactElement) {
+  return rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+}
+
 /** Linha da tabela pelo nome do projeto. */
 function rowOf(name: string): HTMLElement {
   return screen.getByRole('cell', { name: new RegExp(name) }).closest('tr') as HTMLElement;
@@ -142,6 +148,17 @@ describe('ProjectsPage (RF04)', () => {
     expect(within(rowOf('Portal do Cliente')).getByText('Alfa Logística')).toBeInTheDocument();
     expect(within(rowOf('Portal do Cliente')).getByText('Camila Ferreira')).toBeInTheDocument();
     expect(screen.getByText('5 de 5 projetos')).toBeInTheDocument();
+  });
+
+  it('leva aos detalhes pelo nome do projeto (F2-2)', async () => {
+    mockData(allProjects);
+    render(<ProjectsPage />);
+    await screen.findByText('Portal do Cliente');
+
+    expect(screen.getByRole('link', { name: 'Portal do Cliente' })).toHaveAttribute(
+      'href',
+      '/projects/prj-01'
+    );
   });
 
   it('destaca atraso e estouro de orçamento, e não marca prazo igual a hoje', async () => {

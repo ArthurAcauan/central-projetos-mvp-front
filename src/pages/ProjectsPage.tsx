@@ -9,6 +9,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import StatusBadge from '@/components/projects/StatusBadge';
 import { budgetConsumptionPercent, isLate, isOverBudget } from '@/domain/indicators';
 import {
@@ -19,6 +20,7 @@ import {
 } from '@/domain/projectFilters';
 import { useProjectsList } from '@/hooks/useProjectsList';
 import { EMPTY_VALUE, formatCurrency, formatDate, formatPercent } from '@/lib/format';
+import { projectDetailPath } from '@/routes/paths';
 import { isProjectStatus, projectStatuses, projectStatusLabels } from '@/types/project';
 
 const COLUMN_COUNT = 7;
@@ -205,9 +207,14 @@ export default function ProjectsPage() {
                   return (
                     <tr className="transition-colors hover:bg-slate-50" key={project.id}>
                       <td className="px-4 py-3">
-                        <div className="max-w-52 truncate font-medium text-slate-900">
+                        {/* O link é o nome, não a linha inteira: `<tr onClick>`
+                            não recebe foco nem teclado. */}
+                        <Link
+                          className="block max-w-52 truncate font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                          to={projectDetailPath(project.id)}
+                        >
                           {project.name}
-                        </div>
+                        </Link>
                         {(late || overBudget) && (
                           <div className="mt-0.5 flex gap-1 font-mono text-[10px]">
                             {late && <span className="text-red-500">Atrasado</span>}

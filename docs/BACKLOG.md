@@ -51,7 +51,11 @@ Objetivo: tipos, regras e indicadores testados **antes** de qualquer tela depend
   *Entregue:* `src/pages/ProjectsPage.tsx` (layout portado de `Projects.tsx` do protótipo), `src/hooks/useProjectsList.ts` (projetos + clientes + usuários em uma carga só), `src/domain/projectFilters.ts` (recorte puro, busca insensível a acento por projeto/cliente/gestor), `src/components/projects/StatusBadge.tsx` e `src/lib/format.ts` (moeda, data e percentual pt-BR — camada nova, registrada em [ADR-0005](decisions/ADR-0005-camada-lib-de-formatacao.md)).
   *Verificado:* 23 testes novos — atraso e estouro destacados, prazo igual a hoje **não** marcado como atrasado, `budget = 0` exibido como "—", filtros combinados, recorte vazio distinguido de lista vazia, erro da API com "Tentar novamente". Todo indicador vem de `domain/indicators.ts`; a página não calcula nada.
   *Fora desta fatia, de propósito:* botão "Novo projeto" (F2-3) e link para os detalhes (F2-2) — a linha ainda não é clicável.
-- [ ] **F2-2 — Detalhes do projeto (RF05)** — todos os campos + indicadores específicos do projeto.
+- [x] **F2-2 — Detalhes do projeto (RF05)** — todos os campos + indicadores específicos do projeto.
+  *Entregue:* `src/pages/ProjectDetailPage.tsx` (layout portado de `ProjectDetail.tsx` do protótipo, com o painel de alertas que também atende ao RF09), `src/hooks/useProject.ts`, rota `/projects/:id` e o link a partir da lista — no nome do projeto, não na linha inteira, que não recebe foco nem teclado.
+  *Indicadores novos em `domain/indicators.ts`:* `budgetRemaining`, `budgetOverrunPercent`, `daysUntilDeadline`, `scheduleProgressPercent`. O protótipo calcula os três últimos dentro do componente e traz três defeitos junto — data lida em UTC, divisão pelo orçamento zero e divisão por período zero quando início e prazo são o mesmo dia. Aqui cada um tem guarda e teste.
+  *Verificado:* 31 testes novos, incluindo prazo igual a hoje, projeto encerrado após o prazo (não é atraso), `budget = 0` sem `NaN`, e período indisponível quando início = prazo.
+  *Fora desta fatia, de propósito:* botão "Editar projeto" (F2-4).
 - [ ] **F2-3 — Cadastro de projeto (RF03)** — formulário com validação das regras RN01–RN06. `budget_spent > budget` passa com aviso, não com erro.
 - [ ] **F2-4 — Atualização de projeto (RF06)** — reaproveitar o formulário de F2-3.
 
@@ -71,6 +75,7 @@ Objetivo: tipos, regras e indicadores testados **antes** de qualquer tela depend
 
 - [ ] **F5-1 — Integração com a API real** — trocar mock por backend; validar casing do contrato na prática.
 - [ ] **F5-2 — Usabilidade e robustez (RNF01, RNF02)** — revisão de estados vazios/erro, responsividade, formatação de moeda/data pt-BR, acessibilidade básica.
+  *Pendência conhecida:* desde F2-2 o bundle passou de 500 kB (534 kB, 164 kB gzip) por causa do Recharts, e o Vite avisa. Não tratado antes porque o dashboard (F4-2) usa Recharts de qualquer forma; a saída é code-splitting por rota, avaliado aqui.
 - [ ] **F5-3 — Fechamento acadêmico** — README com instruções, dados de demonstração, roteiro para a validação com profissionais de gestão.
 
 ---

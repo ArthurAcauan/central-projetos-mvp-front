@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateByClient,
   budgetConsumptionPercent,
+  budgetOverrunPercent,
+  budgetRemaining,
+  daysUntilDeadline,
   isLate,
   isOverBudget,
   needsAttention,
   parseCalendarDate,
   projectsNeedingAttention,
+  scheduleProgressPercent,
   summarizeProjects,
 } from '@/domain/indicators';
 import type { Client } from '@/types/client';
@@ -99,6 +103,99 @@ describe('isLate (RN08, armadilha A-002)', () => {
   it('degrada para "não atrasado" quando a data é inválida, em vez de quebrar', () => {
     expect(isLate({ deadline: '', status: 'EM_ANDAMENTO' }, TODAY)).toBe(false);
     expect(isLate({ deadline: '31/12/2026', status: 'EM_ANDAMENTO' }, TODAY)).toBe(false);
+  });
+});
+
+describe('budgetRemaining', () => {
+  it('devolve o saldo disponível dentro do orçamento', () => {
+    expect(budgetRemaining({ budget: 100_000, budgetSpent: 25_000 })).toBe(75_000);
+  });
+
+  it('devolve negativo quando estourou — é o excedente (RN03)', () => {
+    expect(budgetRemaining({ budget: 100_000, budgetSpent: 130_000 })).toBe(-30_000);
+  });
+
+  it('sem orçamento previsto, o consumido inteiro é excedente', () => {
+    expect(budgetRemaining({ budget: 0, budgetSpent: 5_000 })).toBe(-5_000);
+  });
+});
+
+describe('budgetOverrunPercent (RN03, RN07)', () => {
+  it('é zero enquanto o consumo cabe no previsto', () => {
+    expect(budgetOverrunPercent({ budget: 100_000, budgetSpent: 25_000 })).toBe(0);
+    expect(budgetOverrunPercent({ budget: 100_000, budgetSpent: 100_000 })).toBe(0);
+  });
+
+  it('mede quanto passou do previsto', () => {
+    expect(budgetOverrunPercent({ budget: 100_000, budgetSpent: 130_000 })).toBeCloseTo(30);
+  });
+
+  it('devolve null sem orçamento previsto, nunca Infinity', () => {
+    expect(budgetOverrunPercent({ budget: 0, budgetSpent: 5_000 })).toBeNull();
+  });
+
+  it('não discorda do percentual de consumo exibido ao lado', () => {
+    const project = { budget: 620_000, budgetSpent: 704_300 };
+    const consumption = budgetConsumptionPercent(project);
+    expect(budgetOverrunPercent(project)).toBeCloseTo((consumption ?? 0) - 100);
+  });
+});
+
+describe('daysUntilDeadline (RF05)', () => {
+  it('conta os dias que faltam', () => {
+    expect(daysUntilDeadline({ deadline: '2026-08-20' }, TODAY)).toBe(14);
+  });
+
+  it('prazo hoje é zero, mesmo com o dia em andamento (armadilha A-002)', () => {
+    expect(daysUntilDeadline({ deadline: '2026-08-06' }, TODAY)).toBe(0);
+  });
+
+  it('prazo vencido devolve negativo', () => {
+    expect(daysUntilDeadline({ deadline: '2026-07-30' }, TODAY)).toBe(-7);
+  });
+
+  it('atravessa a virada do horário de verão sem perder o dia', () => {
+    // No Brasil o horário de verão foi extinto, mas o navegador do usuário pode
+    // estar em outro fuso — a conta é em dias de calendário, não em milissegundos.
+    const beforeDstChange = new Date(2026, 1, 10, 23, 0);
+    expect(daysUntilDeadline({ deadline: '2026-02-25' }, beforeDstChange)).toBe(15);
+  });
+
+  it('devolve null para data inválida', () => {
+    expect(daysUntilDeadline({ deadline: '' }, TODAY)).toBeNull();
+    expect(daysUntilDeadline({ deadline: '20/08/2026' }, TODAY)).toBeNull();
+  });
+});
+
+describe('scheduleProgressPercent (RF05)', () => {
+  it('mede a fração do período já decorrida', () => {
+    // 01/08 a 11/08 são 10 dias; hoje é 06/08 → metade.
+    expect(
+      scheduleProgressPercent({ startDate: '2026-08-01', deadline: '2026-08-11' }, TODAY)
+    ).toBe(50);
+  });
+
+  it('é zero antes de o projeto começar, nunca negativo', () => {
+    expect(
+      scheduleProgressPercent({ startDate: '2026-09-01', deadline: '2026-12-01' }, TODAY)
+    ).toBe(0);
+  });
+
+  it('trava em 100 com o prazo vencido, para a barra não estourar', () => {
+    expect(
+      scheduleProgressPercent({ startDate: '2026-01-01', deadline: '2026-02-01' }, TODAY)
+    ).toBe(100);
+  });
+
+  it('devolve null quando início e prazo são o mesmo dia — nunca Infinity', () => {
+    expect(
+      scheduleProgressPercent({ startDate: '2026-08-06', deadline: '2026-08-06' }, TODAY)
+    ).toBeNull();
+  });
+
+  it('devolve null quando alguma data é inválida', () => {
+    expect(scheduleProgressPercent({ startDate: '', deadline: '2026-12-31' }, TODAY)).toBeNull();
+    expect(scheduleProgressPercent({ startDate: '2026-01-01', deadline: '' }, TODAY)).toBeNull();
   });
 });
 

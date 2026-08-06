@@ -76,6 +76,83 @@ export function needsAttention(
 }
 
 /**
+ * Quanto do orçamento previsto ainda resta. Negativo é o valor que estourou
+ * (RN03) — a tela decide se chama de "saldo disponível" ou de "excedente".
+ *
+ * Sem guarda de zero: subtração não divide, e `budget = 0` dá `-budgetSpent`,
+ * que é a resposta correta.
+ */
+export function budgetRemaining(project: Pick<Project, 'budget' | 'budgetSpent'>): number {
+  return project.budget - project.budgetSpent;
+}
+
+/**
+ * Quanto o consumo passou do previsto, em pontos percentuais. Zero quando está
+ * dentro do orçamento, `null` quando não há previsto para comparar (RN07).
+ *
+ * Deriva de {@link budgetConsumptionPercent} de propósito: os dois números
+ * aparecem na mesma tela e não podem discordar por arredondamento.
+ */
+export function budgetOverrunPercent(
+  project: Pick<Project, 'budget' | 'budgetSpent'>
+): number | null {
+  const consumption = budgetConsumptionPercent(project);
+  if (consumption === null) {
+    return null;
+  }
+  return Math.max(0, consumption - 100);
+}
+
+/**
+ * Dias de calendário até o prazo: positivo é o que resta, negativo é o atraso,
+ * zero é "vence hoje". `null` se o prazo não for uma data válida.
+ *
+ * Conta em dias locais inteiros, não em milissegundos entre instantes — a
+ * diferença entre dois `Date` com hora atravessa o horário de verão e devolve
+ * 29,96 dias, que arredondado erra um dia (parente da armadilha A-002).
+ *
+ * Repare que isto **não** decide atraso sozinho: projeto encerrado tem dias
+ * negativos e não está atrasado. Para isso existe {@link isLate}.
+ */
+export function daysUntilDeadline(
+  project: Pick<Project, 'deadline'>,
+  today: Date = new Date()
+): number | null {
+  const deadline = parseCalendarDate(project.deadline);
+  if (deadline === null) {
+    return null;
+  }
+  return differenceInCalendarDays(deadline, startOfLocalDay(today));
+}
+
+/**
+ * Percentual do período do projeto já decorrido, de 0 a 100 (RF05).
+ *
+ * Limitado a 100 mesmo com o prazo vencido: o excedente é informado como
+ * atraso, e uma barra de 340% não cabe na tela.
+ *
+ * Devolve `null` quando não há período a medir — datas inválidas ou prazo igual
+ * à data de início, em que a divisão produziria `Infinity`/`NaN` (mesma família
+ * da armadilha A-001). O protótipo não tem essa guarda.
+ */
+export function scheduleProgressPercent(
+  project: Pick<Project, 'startDate' | 'deadline'>,
+  today: Date = new Date()
+): number | null {
+  const start = parseCalendarDate(project.startDate);
+  const deadline = parseCalendarDate(project.deadline);
+  if (start === null || deadline === null) {
+    return null;
+  }
+  const totalDays = differenceInCalendarDays(deadline, start);
+  if (totalDays <= 0) {
+    return null;
+  }
+  const elapsedDays = differenceInCalendarDays(startOfLocalDay(today), start);
+  return clampPercent((elapsedDays / totalDays) * 100);
+}
+
+/**
  * Converte uma data de calendário (`YYYY-MM-DD`) em `Date` local à meia-noite.
  *
  * Use isto sempre que precisar de `deadline`/`startDate` como `Date` — inclusive
@@ -116,6 +193,22 @@ export function formatCalendarDate(date: Date): string {
 /** Meia-noite local do dia informado. */
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/**
+ * Diferença em dias de calendário (`a - b`), contando dias inteiros no fuso
+ * local. Ambos os lados são normalizados para meia-noite antes da conta, então
+ * o resultado não depende da hora nem do horário de verão.
+ */
+function differenceInCalendarDays(a: Date, b: Date): number {
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const diff = startOfLocalDay(a).getTime() - startOfLocalDay(b).getTime();
+  return Math.round(diff / MS_PER_DAY);
+}
+
+/** Prende um percentual ao intervalo exibível [0, 100]. */
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, value));
 }
 
 /** Agregados do dashboard gerencial (RF07). */

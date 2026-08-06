@@ -1,0 +1,52 @@
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.local
+
+# Variaveis de ambiente (mantenha .env.example versionado)
+.env
+.env.*
+!.env.example
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code (ajustes pessoais nao versionados)
+.claude/settings.local.json
+
+# --- prototype/ (referencia visual do Figma Make) ---
+# Mantemos versionado o que serve de referencia: os prints (.png), o codigo das
+# telas (src/), index.html e os configs que registram a stack usada no prototipo.
+# O resto e ruido ou duplicata:
+
+# PDFs importados no Figma Make: duplicatas exatas (md5 identico) dos originais
+# em context/, cada um em duas copias. ~1.8 MB sem valor - o original ja esta versionado.
+prototype/**/src/imports/
+
+# Scripts internos da ferramenta (deploy, dev, langserver): nao rodam neste repo.
+prototype/**/.figma/
+
+# Lockfile de um projeto que nao instalamos nem construimos aqui.
+prototype/**/pnpm-lock.yaml
+
+# Instrucoes do Figma Make para agentes: contradizem as nossas
+# (sem router, default exports obrigatorios) e o prototipo nao e codigo do projeto.
+prototype/**/AGENTS.md
+prototype/**/CLAUDE.md
+
+# Config de toolchain do ambiente Figma.
+prototype/**/.mise.toml
+prototype/**/.gitattributes
+prototype/**/.gitignore
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+

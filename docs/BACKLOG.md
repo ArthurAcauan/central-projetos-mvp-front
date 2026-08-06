@@ -18,10 +18,11 @@ Objetivo: sair do esqueleto para um app que roda, com verificação automática 
   Vite 8 + React 19 + TypeScript 5.9, Tailwind CSS v4, ESLint + Prettier + Vitest, alias `@/`, `prototype/` excluído de build/lint/typecheck/test.
   *Verificado:* typecheck, lint, test (1) e build verdes.
 
-- [ ] **F0-2 — Casca da aplicação**
-  `AppShell` com a sidebar escura do protótipo (seções PRINCIPAL / CADASTROS, rodapé com o usuário), rotas em `src/routes/` com páginas placeholder, usuário logado **simulado** (contexto fixo com nome e `role`).
-  *Pronto quando:* navegar entre Dashboard, Projetos, Clientes, Equipes e Usuários funciona por URL. Sem autenticação real (RNF03).
+- [x] **F0-2 — Casca da aplicação**
+  `AppShell` com a sidebar escura do protótipo (seções PRINCIPAL / CADASTROS, rodapé com o usuário), rotas em `src/routes/` com páginas placeholder, usuário logado **simulado** (`src/hooks/useCurrentUser.ts`, valor fixo).
+  *Verificado:* typecheck, lint, format:check, build e 5 testes verdes — resolução por URL, navegação pela sidebar, `aria-current` só no item ativo, rota desconhecida → Dashboard, rodapé com o usuário. Sem autenticação real (RNF03).
   *Referência:* `prototype/**/src/components/Sidebar.tsx` e o rodapé "Rodrigo Almeida · Gerente" nos prints.
+  *Fora do plano, a pedido:* `.gitattributes` corrigindo falha pré-existente de `format:check` (ver [L-003](LESSONS.md)).
 
 - [ ] **F0-3 — Cliente HTTP base**
   `src/services/http.ts` com `baseURL` vindo de `VITE_API_URL`, tratamento de erro padronizado, `.env.example` versionado.
@@ -32,6 +33,7 @@ Objetivo: sair do esqueleto para um app que roda, com verificação automática 
 Objetivo: tipos, regras e indicadores testados **antes** de qualquer tela depender deles.
 
 - [ ] **F1-1 — Tipos de domínio** — `src/types/`: `Project`, `Client`, `Team`, `User`, `ProjectStatus`, `UserRole` com os literais exatos do spec.
+  *Atenção:* `UserRole` já existe em `src/types/user.ts` desde F0-2. Expanda esse arquivo com a entidade `User`; não recrie o union em outro lugar.
 
 - [ ] **F1-2 — Indicadores e regras (crítico)** — `src/domain/indicators.ts` + testes.
   Funções: `budgetConsumptionPercent`, `isLate`, `isOverBudget`, `needsAttention`, e os agregados do dashboard.

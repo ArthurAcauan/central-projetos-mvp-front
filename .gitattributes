@@ -1,0 +1,19 @@
+# Fim de linha LF no repositorio E no working tree, em qualquer plataforma.
+#
+# Sem isto, `core.autocrlf=true` (padrao do Git for Windows) entrega os arquivos
+# com CRLF no checkout, e o Prettier — que usa `endOfLine: "lf"` por padrao —
+# reprova o repositorio inteiro em `npm run format:check`. Ver L-003.
+* text=auto eol=lf
+
+# Binarios: nunca normalizar. As fontes originais do PF2 em context/ sao
+# imutaveis e qualquer conversao corromperia o arquivo.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.woff binary
+*.woff2 binary

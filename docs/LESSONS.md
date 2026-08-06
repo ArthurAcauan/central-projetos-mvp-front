@@ -55,6 +55,10 @@ O pedido "cadastro de usuário com perfil de acesso" (RF01) puxa naturalmente pa
 
 <!-- Novas entradas entram aqui, mais recente no topo. Use /licao. -->
 
+**L-003 — `format:check` reprova o repositório inteiro por causa de CRLF** · ferramental, Windows
+Em F0-2, `npm run format:check` acusou 15 arquivos fora do padrão — inclusive `package.json` e `tsconfig.json`, que ninguém havia tocado. O sintoma engana: parece dívida de formatação acumulada, e o reflexo é rodar `npm run format` e commitar um diff gigante. A causa é única e de configuração: o Git for Windows vem com `core.autocrlf=true` e converte LF→CRLF no checkout, enquanto o Prettier usa `endOfLine: "lf"` por padrão. O conteúdo estava correto o tempo todo — `prettier --check --end-of-line auto .` passava limpo.
+→ Corrigido com `.gitattributes` (`* text=auto eol=lf`, mais `binary` para os `.docx`/`.pdf`/`.png` imutáveis de `context/`), mantendo o Prettier estrito em vez de afrouxar para `endOfLine: "auto"`. Antes de tratar falha em massa de `format:check` como dívida real, rode `prettier --check --end-of-line auto .`: se passar, é fim de linha, não formatação. Aparentado com **A-008** — a mesma classe de armadilha de ferramental no Windows.
+
 **L-001 — `typescript@latest` quebra o `typescript-eslint`** · ferramental
 No scaffold (F0-1), instalar `typescript@latest` trouxe a versão 7, e o `npm install` falhou com `ERESOLVE`: o `typescript-eslint` 8 declara peer `typescript >=4.8.4 <6.1.0`. O sintoma é um erro de árvore de dependências que tenta empurrar `--force`/`--legacy-peer-deps` como solução.
 → O TypeScript está fixado em `~5.9` no `package.json`. **Não** resolva conflito de peer com `--force` ou `--legacy-peer-deps`: isso instala uma combinação que o lint não suporta e o erro reaparece depois, disfarçado. Só suba para TS 7 quando o `typescript-eslint` declarar suporte.

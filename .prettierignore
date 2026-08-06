@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+prototype
+pnpm-lock.yaml
+package-lock.json
+
+# Documentacao e escrita e revisada a mao. O Prettier so realinharia pipes de
+# tabela e, nos documentos de context/ (fonte do TCC), reescreveria o arquivo
+# inteiro a cada rodada, poluindo o diff sem ganho. Prettier cuida do codigo.
+*.md

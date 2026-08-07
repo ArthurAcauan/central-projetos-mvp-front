@@ -11,8 +11,10 @@
  */
 
 import { useMemo, useState } from 'react';
+import TableScroll from '@/components/TableScroll';
 import RegistryLayout from '@/components/registry/RegistryLayout';
 import { validateUser, type UserFieldErrors, type UserFormValues } from '@/domain/registryRules';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useRegistry } from '@/hooks/useRegistry';
 import { formatTimestamp } from '@/lib/format';
 import { isHttpError } from '@/services/http';
@@ -33,6 +35,7 @@ const roleToneClass: Record<UserRole, string> = {
 };
 
 export default function UsersPage() {
+  useDocumentTitle('Usuários');
   const { items: users, projects, isLoading, error, reload, addItem } = useRegistry(listUsers);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -117,11 +120,14 @@ export default function UsersPage() {
       successMessage={successMessage}
       title="Usuários"
     >
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
+      <TableScroll
+        className="rounded-lg border border-slate-200 bg-white"
+        label="Usuários cadastrados"
+      >
+        <table className="w-full min-w-2xl text-sm">
           <caption className="sr-only">Usuários cadastrados</caption>
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 font-mono text-[11px] text-slate-400 uppercase">
+            <tr className="border-b border-slate-200 bg-slate-50 font-mono text-[11px] text-slate-500 uppercase">
               <th className="px-4 py-3 text-left font-medium" scope="col">
                 Nome
               </th>
@@ -142,7 +148,7 @@ export default function UsersPage() {
           <tbody className="divide-y divide-slate-50">
             {users.length === 0 ? (
               <tr>
-                <td className="px-4 py-10 text-center text-sm text-slate-400" colSpan={5}>
+                <td className="px-4 py-10 text-center text-sm text-slate-500" colSpan={5}>
                   Nenhum usuário cadastrado.
                 </td>
               </tr>
@@ -157,7 +163,7 @@ export default function UsersPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </RegistryLayout>
   );
 }
@@ -187,7 +193,7 @@ function UserForm({
         onSubmit();
       }}
     >
-      <h2 className="mb-4 font-mono text-xs font-medium tracking-widest text-slate-400 uppercase">
+      <h2 className="mb-4 font-mono text-xs font-medium tracking-widest text-slate-500 uppercase">
         Novo usuário
       </h2>
 
@@ -328,7 +334,7 @@ function UserRow({ user, managedCount }: { user: User; managedCount: number }) {
           {managedCount} {managedCount === 1 ? 'projeto' : 'projetos'}
         </span>
       </td>
-      <td className="px-4 py-3 font-mono text-xs text-slate-400">
+      <td className="px-4 py-3 font-mono text-xs text-slate-500">
         {formatTimestamp(user.createdAt)}
       </td>
     </tr>

@@ -18,6 +18,7 @@ import {
   daysUntilDeadline,
   scheduleProgressPercent,
 } from '@/domain/indicators';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useProject } from '@/hooks/useProject';
 import { EMPTY_VALUE, formatCurrency, formatDate, formatNumber, formatPercent } from '@/lib/format';
 import { paths, projectEditPath } from '@/routes/paths';
@@ -25,17 +26,20 @@ import type { Project } from '@/types/project';
 
 const cardClass = 'rounded-lg border border-slate-200 bg-white p-4';
 const cardTitleClass =
-  'mb-3 font-mono text-xs font-medium tracking-widest text-slate-400 uppercase';
+  'mb-3 font-mono text-xs font-medium tracking-widest text-slate-500 uppercase';
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { project, isLoading, error, reload } = useProject(id);
+  // Antes dos retornos antecipados: a ordem dos hooks não pode depender do
+  // estado da carga. Enquanto não há projeto, o título fica genérico.
+  useDocumentTitle(project?.name ?? 'Projeto');
 
   if (isLoading) {
     return (
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 sm:p-6">
         <BackLink />
-        <p className={`${cardClass} mt-5 py-10 text-center text-sm text-slate-400`} role="status">
+        <p className={`${cardClass} mt-5 py-10 text-center text-sm text-slate-500`} role="status">
           Carregando projeto...
         </p>
       </div>
@@ -44,7 +48,7 @@ export default function ProjectDetailPage() {
 
   if (error !== null || project === null) {
     return (
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 sm:p-6">
         <BackLink />
         <div
           className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-8 text-center"
@@ -80,7 +84,7 @@ function ProjectDetailView({ project }: { project: Project }) {
   const scheduleProgress = scheduleProgressPercent(project);
 
   return (
-    <div className="flex-1 overflow-auto p-6">
+    <div className="flex-1 overflow-auto p-4 sm:p-6">
       <div className="mb-5 flex flex-wrap items-start gap-3">
         <BackLink />
         <div aria-hidden="true" className="h-5 w-px bg-slate-200" />
@@ -129,7 +133,7 @@ function ProjectDetailView({ project }: { project: Project }) {
         <div className="space-y-4 lg:col-span-2">
           <section className={cardClass}>
             <h2 className={cardTitleClass}>Informações gerais</h2>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
               <InfoRow label="Cliente" value={project.client.name} />
               <InfoRow label="Gestor responsável" value={project.manager.name} />
               <InfoRow label="Equipe" value={project.team.name} />
@@ -168,7 +172,7 @@ function ProjectDetailView({ project }: { project: Project }) {
             </div>
             {scheduleProgress === null ? (
               // Início e prazo no mesmo dia, ou data inválida: não há período a medir.
-              <p className="text-xs text-slate-400">Período do projeto indisponível.</p>
+              <p className="text-xs text-slate-500">Período do projeto indisponível.</p>
             ) : (
               <>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -179,7 +183,7 @@ function ProjectDetailView({ project }: { project: Project }) {
                     style={{ width: `${scheduleProgress}%` }}
                   />
                 </div>
-                <div className="mt-1.5 flex justify-between font-mono text-[10px] text-slate-400">
+                <div className="mt-1.5 flex justify-between font-mono text-[10px] text-slate-500">
                   <span>{formatDate(project.startDate)}</span>
                   <span>{Math.round(scheduleProgress)}% do período</span>
                   <span>{formatDate(project.deadline)}</span>
@@ -193,7 +197,7 @@ function ProjectDetailView({ project }: { project: Project }) {
           <section className={`${cardClass} text-center`}>
             <h2 className={cardTitleClass}>Consumo do orçamento</h2>
             <BudgetGauge consumption={consumption} overBudget={overBudget} />
-            <p className="mt-1 font-mono text-xs text-slate-400">
+            <p className="mt-1 font-mono text-xs text-slate-500">
               {formatCurrency(project.budgetSpent)} / {formatCurrency(project.budget)}
             </p>
           </section>
@@ -222,7 +226,7 @@ function ProjectDetailView({ project }: { project: Project }) {
             <p className="font-mono text-3xl font-bold text-slate-800">
               {formatNumber(project.hoursWorked)}
             </p>
-            <p className="mt-1 text-xs text-slate-400">horas realizadas no projeto</p>
+            <p className="mt-1 text-xs text-slate-500">horas realizadas no projeto</p>
           </section>
         </div>
       </div>
@@ -233,7 +237,7 @@ function ProjectDetailView({ project }: { project: Project }) {
 function BackLink() {
   return (
     <Link
-      className="flex items-center gap-1 text-sm text-slate-400 transition-colors hover:text-slate-700"
+      className="flex items-center gap-1 text-sm text-slate-500 transition-colors hover:text-slate-700"
       to={paths.projects}
     >
       <span aria-hidden="true">←</span> Voltar
@@ -263,7 +267,7 @@ function BudgetGauge({
     return (
       <>
         <p className={`font-mono text-2xl font-bold ${valueClass}`}>{EMPTY_VALUE}</p>
-        <p className="mt-1 text-xs text-slate-400">Sem orçamento previsto para comparar.</p>
+        <p className="mt-1 text-xs text-slate-500">Sem orçamento previsto para comparar.</p>
       </>
     );
   }
@@ -313,7 +317,7 @@ function InfoRow({
 }) {
   return (
     <div>
-      <dt className="mb-0.5 text-[11px] text-slate-400">{label}</dt>
+      <dt className="mb-0.5 text-[11px] text-slate-500">{label}</dt>
       <dd
         className={`text-sm font-medium ${highlight ? 'text-red-600' : 'text-slate-800'} ${
           mono ? 'font-mono' : ''

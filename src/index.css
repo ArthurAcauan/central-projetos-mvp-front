@@ -47,6 +47,24 @@
   --radius: 6px;
 }
 
+/*
+ * Foco visível para tudo que recebe foco por teclado (F5-2, RNF01).
+ *
+ * Os campos já declaram o anel azul um a um; links, botões e a região rolável
+ * das tabelas ficavam com o contorno padrão do navegador, que muda de forma a
+ * cada um e some sobre fundo escuro. Aqui é o piso — quem precisa de outra cor
+ * (a sidebar, que é `slate-900`) sobrescreve com `focus-visible:outline-*`.
+ *
+ * Precisa estar em `@layer base`: regra fora de camada vence as utilidades do
+ * Tailwind, e a sidebar não conseguiria trocar a cor do anel.
+ */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

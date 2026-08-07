@@ -15,6 +15,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import ProjectForm from '@/components/projects/ProjectForm';
 import type { ProjectFormValues } from '@/domain/projectRules';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useProjectFormData } from '@/hooks/useProjectFormData';
 import { toFormValues, useProjectFormState } from '@/hooks/useProjectFormState';
 import { paths, projectDetailPath } from '@/routes/paths';
@@ -52,12 +53,18 @@ export default function ProjectFormPage() {
   // Sem `:id` na rota é cadastro; com `:id` é edição do projeto correspondente.
   const { id } = useParams<{ id: string }>();
   const { project, clients, users, teams, isLoading, error, reload } = useProjectFormData(id);
+  useDocumentTitle(id === undefined ? 'Novo projeto' : 'Editar projeto');
+
+  // Cliente, gestor e equipe são obrigatórios e vêm de cadastro próprio (RN06):
+  // em base recém-criada, o formulário abriria com três seletores que só têm
+  // "Selecione..." e recusaria qualquer tentativa de salvar, sem dizer por quê.
+  const missing = missingRegistries(clients.length, users.length, teams.length);
 
   return (
-    <div className="flex-1 overflow-auto p-6">
+    <div className="flex-1 overflow-auto p-4 sm:p-6">
       <div className="mb-5 flex items-center gap-3">
         <Link
-          className="text-sm text-slate-400 transition-colors hover:text-slate-700"
+          className="text-sm text-slate-500 transition-colors hover:text-slate-700"
           to={id === undefined ? paths.projects : projectDetailPath(id)}
         >
           <span aria-hidden="true">←</span> Voltar
@@ -70,7 +77,7 @@ export default function ProjectFormPage() {
 
       {isLoading && (
         <p
-          className="max-w-3xl rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400"
+          className="max-w-3xl rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500"
           role="status"
         >
           Carregando formulário...
@@ -93,10 +100,14 @@ export default function ProjectFormPage() {
         </div>
       )}
 
+      {!isLoading && error === null && missing.length > 0 && (
+        <MissingRegistries missing={missing} />
+      )}
+
       {/* O editor só monta com os dados em mãos: assim o preenchimento inicial
           da edição é o estado inicial do `useState`, e não um `setState` dentro
           de efeito (lição L-004). A `key` refaz o estado se o projeto trocar. */}
-      {!isLoading && error === null && (
+      {!isLoading && error === null && missing.length === 0 && (
         <ProjectEditor
           clients={clients}
           key={project?.id ?? 'new'}
@@ -105,6 +116,64 @@ export default function ProjectFormPage() {
           users={users}
         />
       )}
+    </div>
+  );
+}
+
+interface MissingRegistry {
+  /** O que falta, na voz da frase. Ex.: "um cliente". */
+  label: string;
+  /** Nome da tela que resolve. Ex.: "Clientes". */
+  screen: string;
+  path: string;
+}
+
+/**
+ * Quais cadastros faltam para que um projeto possa existir. Ordem fixa, a mesma
+ * do formulário, para a frase não mudar de ordem entre uma carga e outra.
+ */
+function missingRegistries(
+  clientCount: number,
+  userCount: number,
+  teamCount: number
+): MissingRegistry[] {
+  const missing: MissingRegistry[] = [];
+  if (clientCount === 0) {
+    missing.push({ label: 'um cliente', screen: 'Clientes', path: paths.clients });
+  }
+  if (userCount === 0) {
+    missing.push({ label: 'um usuário para ser o gestor', screen: 'Usuários', path: paths.users });
+  }
+  if (teamCount === 0) {
+    missing.push({ label: 'uma equipe', screen: 'Equipes', path: paths.teams });
+  }
+  return missing;
+}
+
+/**
+ * Estado vazio do formulário: base sem os cadastros de apoio. Diz o que falta e
+ * leva até a tela que resolve — o caminho de menor esforço para quem acabou de
+ * subir o sistema e foi direto cadastrar o primeiro projeto.
+ */
+function MissingRegistries({ missing }: { missing: MissingRegistry[] }) {
+  return (
+    <div
+      className="max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-800"
+      role="status"
+    >
+      <p className="font-medium">
+        Antes de cadastrar um projeto é preciso ter os cadastros de apoio.
+      </p>
+      <ul className="mt-2 list-inside list-disc space-y-1">
+        {missing.map((item) => (
+          <li key={item.path}>
+            Cadastre {item.label} em{' '}
+            <Link className="font-medium underline underline-offset-2" to={item.path}>
+              {item.screen}
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -82,3 +82,54 @@ describe('casca da aplicacao', () => {
     expect(screen.getByText('Gerente')).toBeInTheDocument();
   });
 });
+
+/**
+ * F5-2. Em tela estreita a navegação vira gaveta, e quem decide entre gaveta e
+ * coluna é o `lg:` do CSS — que o jsdom não aplica. O que dá para verificar aqui
+ * é o estado que o React controla: o `aria-expanded` do botão, que é também o
+ * que um leitor de tela anuncia.
+ */
+describe('navegacao em tela estreita', () => {
+  it('abre a gaveta pelo botao de menu e fecha ao navegar', async () => {
+    renderAt('/projects');
+    const menu = screen.getByRole('button', { name: /Menu/ });
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(menu);
+    expect(menu).toHaveAttribute('aria-expanded', 'true');
+
+    // Navegar com a gaveta aberta a deixaria cobrindo a tela recém-pedida.
+    await userEvent.click(screen.getByRole('link', { name: 'Clientes' }));
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('fecha a gaveta pelo botao de fechar', async () => {
+    renderAt('/projects');
+    const menu = screen.getByRole('button', { name: /Menu/ });
+    await userEvent.click(menu);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar menu' }));
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+describe('acessibilidade da casca', () => {
+  it('oferece um link para pular a navegacao', () => {
+    renderAt('/projects');
+    expect(screen.getByRole('link', { name: 'Pular para o conteúdo' })).toHaveAttribute(
+      'href',
+      '#conteudo'
+    );
+    expect(document.getElementById('conteudo')).not.toBeNull();
+  });
+
+  // Sem isto, toda tela da aplicação de página única compartilha o título do
+  // index.html e a navegação não é anunciada.
+  it('troca o titulo do documento a cada tela', async () => {
+    renderAt('/projects');
+    expect(document.title).toBe('Projetos · GestProject');
+
+    await userEvent.click(screen.getByRole('link', { name: 'Equipes' }));
+    expect(document.title).toBe('Equipes · GestProject');
+  });
+});

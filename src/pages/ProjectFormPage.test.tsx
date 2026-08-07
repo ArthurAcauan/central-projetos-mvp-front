@@ -410,3 +410,39 @@ describe('atualização de projeto (RF06)', () => {
     expect(updateProject).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Base recém-criada, sem os cadastros de apoio. Sem este estado o formulário
+ * abre com três seletores vazios e recusa qualquer tentativa de salvar, sem
+ * dizer o que falta (F5-2).
+ */
+describe('cadastros de apoio ausentes', () => {
+  it('diz o que falta e não monta o formulário quando não há cliente, gestor nem equipe', async () => {
+    vi.mocked(listClients).mockResolvedValue([]);
+    vi.mocked(listUsers).mockResolvedValue([]);
+    vi.mocked(listTeams).mockResolvedValue([]);
+    render();
+
+    // Pelo texto, e não por `role="status"`: o "Carregando formulário..." usa o
+    // mesmo papel e responderia primeiro.
+    expect(await screen.findByText(/cadastros de apoio/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Clientes' })).toHaveAttribute('href', '/clients');
+    expect(screen.getByRole('link', { name: 'Usuários' })).toHaveAttribute('href', '/users');
+    expect(screen.getByRole('link', { name: 'Equipes' })).toHaveAttribute('href', '/teams');
+    expect(screen.queryByLabelText(/Nome do projeto/)).not.toBeInTheDocument();
+  });
+
+  it('aponta só o cadastro que está faltando', async () => {
+    vi.mocked(listTeams).mockResolvedValue([]);
+    render();
+
+    await screen.findByText(/cadastros de apoio/);
+    expect(screen.getByRole('link', { name: 'Equipes' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Clientes' })).not.toBeInTheDocument();
+  });
+
+  it('monta o formulário normalmente quando os três cadastros existem', async () => {
+    await renderReady();
+    expect(screen.queryByText(/cadastros de apoio/)).not.toBeInTheDocument();
+  });
+});

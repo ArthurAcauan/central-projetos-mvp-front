@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react';
 import NameFieldForm from '@/components/registry/NameFieldForm';
 import RegistryLayout from '@/components/registry/RegistryLayout';
 import { validateTeamName } from '@/domain/registryRules';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useRegistry } from '@/hooks/useRegistry';
 import { formatTimestamp } from '@/lib/format';
 import { isHttpError } from '@/services/http';
@@ -28,6 +29,7 @@ interface TeamWorkload {
 }
 
 export default function TeamsPage() {
+  useDocumentTitle('Equipes');
   const { items: teams, projects, isLoading, error, reload, addItem } = useRegistry(listTeams);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -102,7 +104,7 @@ export default function TeamsPage() {
       title="Equipes"
     >
       {teams.length === 0 ? (
-        <p className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400">
+        <p className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
           Nenhuma equipe cadastrada.
         </p>
       ) : (
@@ -154,7 +156,7 @@ function TeamCard({ team, workload }: { team: Team; workload: TeamWorkload }) {
         </span>
         <div>
           <h2 className="text-sm font-semibold text-slate-800">{team.name}</h2>
-          <p className="font-mono text-[10px] text-slate-400">
+          <p className="font-mono text-[10px] text-slate-500">
             desde {formatTimestamp(team.createdAt)}
           </p>
         </div>
@@ -172,7 +174,7 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: st
   return (
     <div>
       <dd className={`font-mono text-lg font-bold ${tone}`}>{value}</dd>
-      <dt className="text-[10px] text-slate-400">{label}</dt>
+      <dt className="text-[10px] text-slate-500">{label}</dt>
     </div>
   );
 }

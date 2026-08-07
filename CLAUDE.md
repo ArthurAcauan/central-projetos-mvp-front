@@ -6,7 +6,9 @@ Comunicação: responda sempre em **português (pt-BR)**. Código, nomes de arqu
 
 ## Estado do repositório
 
-Este é o **frontend** de um MVP acadêmico de dois repositórios (Projeto Final II — "Plataforma de Centralização e Análise de Informações para Gestão de Projetos"). Concluídas as fases 0 a 4 e a **integração com a API real** (F5-1): RF01–RF09 cobertos, rodando contra o backend em `http://localhost:3333`. Faltam F5-2 (usabilidade e code-splitting) e F5-3 (fechamento acadêmico) — estado corrente sempre em [docs/BACKLOG.md](docs/BACKLOG.md).
+Este é o **frontend** de um MVP acadêmico de dois repositórios (Projeto Final II — "Plataforma de Centralização e Análise de Informações para Gestão de Projetos"). **Todas as fases estão concluídas**: RF01–RF09 cobertos, integrado à API real em `http://localhost:3333`, com usabilidade/acessibilidade revistas (F5-2) e fechamento acadêmico entregue (F5-3). Estado corrente sempre em [docs/BACKLOG.md](docs/BACKLOG.md).
+
+Trabalho novo a partir daqui é fatia nova no backlog, não emenda em fatia fechada.
 
 ## Comandos
 
@@ -33,6 +35,7 @@ O alias `@/` aponta para `src/`.
 | [docs/HARNESS.md](docs/HARNESS.md) | Como o trabalho flui: ciclo de tarefa, guardrails, Definition of Done |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Fatias de trabalho (`F0-1`, `F1-2`, …) rastreadas até os RFs |
 | [docs/LESSONS.md](docs/LESSONS.md) | Armadilhas conhecidas — **consulte antes de mexer em indicadores, datas ou serviços** |
+| [docs/ROTEIRO_VALIDACAO.md](docs/ROTEIRO_VALIDACAO.md) | Roteiro da avaliação com profissionais; define o que a carteira de demonstração precisa conter |
 | [docs/decisions/](docs/decisions/) | ADRs; decisões estruturais já tomadas |
 
 Rituais disponíveis: `/tarefa <id>` para começar, `/checar-escopo` durante, `/fechar-tarefa <id>` para fechar, `/licao` para registrar aprendizado. Subagentes: `revisor-escopo` e `revisor-front`.

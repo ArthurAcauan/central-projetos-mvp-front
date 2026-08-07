@@ -194,7 +194,7 @@ export default function ProjectForm({
               ))}
             </select>
             {statusLocked && (
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-slate-500">
                 Projeto encerrado: o status não pode ser alterado.
               </p>
             )}
@@ -285,7 +285,7 @@ export default function ProjectForm({
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <h2 className="mb-4 font-mono text-xs font-medium tracking-widest text-slate-400 uppercase">
+    <h2 className="mb-4 font-mono text-xs font-medium tracking-widest text-slate-500 uppercase">
       {children}
     </h2>
   );

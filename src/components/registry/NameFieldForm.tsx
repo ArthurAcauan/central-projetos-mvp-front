@@ -45,7 +45,7 @@ export default function NameFieldForm({
 
   return (
     <form noValidate onSubmit={handleSubmit}>
-      <h2 className="mb-4 font-mono text-xs font-medium tracking-widest text-slate-400 uppercase">
+      <h2 className="mb-4 font-mono text-xs font-medium tracking-widest text-slate-500 uppercase">
         {legend}
       </h2>
 
@@ -58,7 +58,9 @@ export default function NameFieldForm({
         </p>
       )}
 
-      <div className="flex items-end gap-3">
+      {/* Empilhado em tela estreita: campo e botão lado a lado sobram menos de
+          200 px para digitar o nome. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
           <label className="mb-1 block text-xs font-medium text-slate-600" htmlFor={inputId}>
             {label}

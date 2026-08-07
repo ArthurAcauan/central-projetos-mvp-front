@@ -48,7 +48,9 @@ const SPENT_COLOR = '#f97316';
 const HOURS_COLOR = '#8b5cf6';
 const COUNT_COLOR = '#0ea5e9';
 
-const axisTick = { fontSize: 10, fill: '#94a3b8' };
+/** `slate-500`, e não o `slate-400` do protótipo: em 10px sobre branco o tom
+ *  mais claro fica em 2,6:1 de contraste e o eixo some (F5-2). */
+const axisTick = { fontSize: 10, fill: '#64748b' };
 
 /**
  * O Recharts entrega o valor do tooltip como `ValueType | undefined`, então os
@@ -193,11 +195,11 @@ interface ChartCardProps {
 function ChartCard({ title, isEmpty, emptyMessage, children }: ChartCardProps) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="mb-3 font-mono text-xs font-medium tracking-widest text-slate-400 uppercase">
+      <h2 className="mb-3 font-mono text-xs font-medium tracking-widest text-slate-500 uppercase">
         {title}
       </h2>
       {isEmpty ? (
-        <p className="py-16 text-center text-sm text-slate-400">{emptyMessage}</p>
+        <p className="py-16 text-center text-sm text-slate-500">{emptyMessage}</p>
       ) : (
         <div aria-hidden="true">{children}</div>
       )}

@@ -8,9 +8,11 @@
  */
 
 import { useMemo, useState } from 'react';
+import TableScroll from '@/components/TableScroll';
 import NameFieldForm from '@/components/registry/NameFieldForm';
 import RegistryLayout from '@/components/registry/RegistryLayout';
 import { validateClientName } from '@/domain/registryRules';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useRegistry } from '@/hooks/useRegistry';
 import { formatTimestamp } from '@/lib/format';
 import { isHttpError } from '@/services/http';
@@ -20,6 +22,7 @@ import type { Client } from '@/types/client';
 const FALLBACK_ERROR = 'Não foi possível cadastrar o cliente. Tente novamente.';
 
 export default function ClientsPage() {
+  useDocumentTitle('Clientes');
   const { items: clients, projects, isLoading, error, reload, addItem } = useRegistry(listClients);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -99,11 +102,14 @@ export default function ClientsPage() {
       successMessage={successMessage}
       title="Clientes"
     >
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
+      <TableScroll
+        className="rounded-lg border border-slate-200 bg-white"
+        label="Clientes cadastrados"
+      >
+        <table className="w-full min-w-lg text-sm">
           <caption className="sr-only">Clientes cadastrados</caption>
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 font-mono text-[11px] text-slate-400 uppercase">
+            <tr className="border-b border-slate-200 bg-slate-50 font-mono text-[11px] text-slate-500 uppercase">
               <th className="px-4 py-3 text-left font-medium" scope="col">
                 Cliente
               </th>
@@ -118,7 +124,7 @@ export default function ClientsPage() {
           <tbody className="divide-y divide-slate-50">
             {clients.length === 0 ? (
               <tr>
-                <td className="px-4 py-10 text-center text-sm text-slate-400" colSpan={3}>
+                <td className="px-4 py-10 text-center text-sm text-slate-500" colSpan={3}>
                   Nenhum cliente cadastrado.
                 </td>
               </tr>
@@ -133,7 +139,7 @@ export default function ClientsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </RegistryLayout>
   );
 }
@@ -157,7 +163,7 @@ function ClientRow({ client, projectCount }: { client: Client; projectCount: num
           {projectCount} {projectCount === 1 ? 'projeto' : 'projetos'}
         </span>
       </td>
-      <td className="px-4 py-3 font-mono text-xs text-slate-400">
+      <td className="px-4 py-3 font-mono text-xs text-slate-500">
         {formatTimestamp(client.createdAt)}
       </td>
     </tr>

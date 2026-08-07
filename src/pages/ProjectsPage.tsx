@@ -11,6 +11,7 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import TableScroll from '@/components/TableScroll';
 import StatusBadge from '@/components/projects/StatusBadge';
 import {
   emptyProjectFilters,
@@ -18,6 +19,7 @@ import {
   hasActiveFilters,
   type ProjectFilters,
 } from '@/domain/projectFilters';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useProjectsList } from '@/hooks/useProjectsList';
 import { formatCurrency, formatDate, formatPercent } from '@/lib/format';
 import { paths, projectDetailPath } from '@/routes/paths';
@@ -29,6 +31,7 @@ const inputClass =
   'rounded border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500';
 
 export default function ProjectsPage() {
+  useDocumentTitle('Projetos');
   const { projects, clients, isLoading, error, reload } = useProjectsList();
   const [filters, setFilters] = useState<ProjectFilters>(emptyProjectFilters);
 
@@ -37,7 +40,7 @@ export default function ProjectsPage() {
   const filtersActive = hasActiveFilters(filters);
 
   return (
-    <div className="flex-1 overflow-auto p-6">
+    <div className="flex-1 overflow-auto p-4 sm:p-6">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Projetos</h1>
@@ -118,7 +121,7 @@ export default function ProjectsPage() {
 
       {isLoading && (
         <p
-          className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400"
+          className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500"
           role="status"
         >
           Carregando projetos...
@@ -142,11 +145,14 @@ export default function ProjectsPage() {
       )}
 
       {!isLoading && error === null && (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <table className="w-full text-sm">
+        <TableScroll
+          className="rounded-lg border border-slate-200 bg-white"
+          label="Projetos cadastrados"
+        >
+          <table className="w-full min-w-3xl text-sm">
             <caption className="sr-only">Projetos cadastrados</caption>
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 font-mono text-[11px] text-slate-400 uppercase">
+              <tr className="border-b border-slate-200 bg-slate-50 font-mono text-[11px] text-slate-500 uppercase">
                 <th className="px-4 py-3 text-left font-medium" scope="col">
                   Projeto
                 </th>
@@ -174,7 +180,7 @@ export default function ProjectsPage() {
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    className="px-4 py-10 text-center text-sm text-slate-400"
+                    className="px-4 py-10 text-center text-sm text-slate-500"
                     colSpan={COLUMN_COUNT}
                   >
                     {filtersActive ? (
@@ -272,7 +278,7 @@ export default function ProjectsPage() {
               )}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
     </div>
   );

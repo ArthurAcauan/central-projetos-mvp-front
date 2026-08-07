@@ -18,6 +18,7 @@
 
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import TableScroll from '@/components/TableScroll';
 import DashboardCharts from '@/components/dashboard/DashboardCharts';
 import KpiCard from '@/components/dashboard/KpiCard';
 import StatusBadge from '@/components/projects/StatusBadge';
@@ -28,6 +29,7 @@ import {
   topProjectsByHours,
 } from '@/domain/indicators';
 import { useDashboard } from '@/hooks/useDashboard';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { EMPTY_VALUE, formatCurrency, formatDate, formatNumber, formatPercent } from '@/lib/format';
 import { projectDetailPath } from '@/routes/paths';
 import {
@@ -38,6 +40,7 @@ import {
 } from '@/types/project';
 
 export default function DashboardPage() {
+  useDocumentTitle('Dashboard');
   const { projects, isLoading, error, reload } = useDashboard();
 
   const summary = useMemo(() => summarizeProjects(projects), [projects]);
@@ -46,7 +49,7 @@ export default function DashboardPage() {
   const attention = useMemo(() => projectsNeedingAttention(projects), [projects]);
 
   return (
-    <div className="flex-1 overflow-auto p-6">
+    <div className="flex-1 overflow-auto p-4 sm:p-6">
       <header className="mb-6">
         <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
         <p className="mt-0.5 font-mono text-sm text-slate-500">
@@ -56,7 +59,7 @@ export default function DashboardPage() {
 
       {isLoading && (
         <p
-          className="rounded-lg border border-slate-200 bg-white px-4 py-16 text-center text-sm text-slate-400"
+          className="rounded-lg border border-slate-200 bg-white px-4 py-16 text-center text-sm text-slate-500"
           role="status"
         >
           Carregando indicadores...
@@ -81,7 +84,7 @@ export default function DashboardPage() {
 
       {!isLoading && error === null && (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
               detail={`${formatNumber(byClient.length)} ${byClient.length === 1 ? 'cliente' : 'clientes'} com projeto`}
               label="Total de projetos"
@@ -155,84 +158,86 @@ function AttentionPanel({ projects }: { projects: ProjectSummary[] }) {
       </div>
 
       {projects.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-slate-400">
+        <p className="px-4 py-8 text-center text-sm text-slate-500">
           Nenhum projeto em situação de atenção.
         </p>
       ) : (
-        <table className="w-full text-sm">
-          <caption className="sr-only">
-            Projetos em risco, atrasados ou com orçamento excedido
-          </caption>
-          <thead>
-            <tr className="border-b border-slate-100 font-mono text-[11px] text-slate-400 uppercase">
-              <th className="px-4 py-2.5 text-left font-medium" scope="col">
-                Projeto
-              </th>
-              <th className="px-4 py-2.5 text-left font-medium" scope="col">
-                Status
-              </th>
-              <th className="px-4 py-2.5 text-left font-medium" scope="col">
-                Motivo
-              </th>
-              <th className="px-4 py-2.5 text-left font-medium" scope="col">
-                Prazo
-              </th>
-              <th className="px-4 py-2.5 text-right font-medium" scope="col">
-                Consumo
-              </th>
-              <th className="px-4 py-2.5 text-right font-medium" scope="col">
-                Orçamento
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {projects.map((project) => {
-              const {
-                isLate: late,
-                isOverBudget: overBudget,
-                consumptionPercent: consumption,
-              } = project.indicators;
+        <TableScroll label="Projetos em situação de atenção">
+          <table className="w-full min-w-3xl text-sm">
+            <caption className="sr-only">
+              Projetos em risco, atrasados ou com orçamento excedido
+            </caption>
+            <thead>
+              <tr className="border-b border-slate-100 font-mono text-[11px] text-slate-500 uppercase">
+                <th className="px-4 py-2.5 text-left font-medium" scope="col">
+                  Projeto
+                </th>
+                <th className="px-4 py-2.5 text-left font-medium" scope="col">
+                  Status
+                </th>
+                <th className="px-4 py-2.5 text-left font-medium" scope="col">
+                  Motivo
+                </th>
+                <th className="px-4 py-2.5 text-left font-medium" scope="col">
+                  Prazo
+                </th>
+                <th className="px-4 py-2.5 text-right font-medium" scope="col">
+                  Consumo
+                </th>
+                <th className="px-4 py-2.5 text-right font-medium" scope="col">
+                  Orçamento
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {projects.map((project) => {
+                const {
+                  isLate: late,
+                  isOverBudget: overBudget,
+                  consumptionPercent: consumption,
+                } = project.indicators;
 
-              return (
-                <tr className="transition-colors hover:bg-slate-50" key={project.id}>
-                  <td className="px-4 py-3">
-                    <Link
-                      className="font-medium text-slate-900 hover:text-blue-600 hover:underline"
-                      to={projectDetailPath(project.id)}
-                    >
-                      {project.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge size="sm" status={project.status} />
-                  </td>
-                  {/* Motivo em texto, não só em cor: o mesmo sinal precisa
+                return (
+                  <tr className="transition-colors hover:bg-slate-50" key={project.id}>
+                    <td className="px-4 py-3">
+                      <Link
+                        className="font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                        to={projectDetailPath(project.id)}
+                      >
+                        {project.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge size="sm" status={project.status} />
+                    </td>
+                    {/* Motivo em texto, não só em cor: o mesmo sinal precisa
                       chegar a quem não distingue vermelho de cinza. */}
-                  <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
-                    {reasonsFor(project)}
-                  </td>
-                  <td
-                    className={`px-4 py-3 font-mono text-xs ${
-                      late ? 'font-medium text-red-600' : 'text-slate-600'
-                    }`}
-                  >
-                    {formatDate(project.deadline)}
-                  </td>
-                  <td
-                    className={`px-4 py-3 text-right font-mono text-xs ${
-                      overBudget ? 'font-semibold text-red-600' : 'text-slate-600'
-                    }`}
-                  >
-                    {consumption === null ? EMPTY_VALUE : formatPercent(consumption)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-slate-600">
-                    {formatCurrency(project.budget)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
+                      {reasonsFor(project)}
+                    </td>
+                    <td
+                      className={`px-4 py-3 font-mono text-xs ${
+                        late ? 'font-medium text-red-600' : 'text-slate-600'
+                      }`}
+                    >
+                      {formatDate(project.deadline)}
+                    </td>
+                    <td
+                      className={`px-4 py-3 text-right font-mono text-xs ${
+                        overBudget ? 'font-semibold text-red-600' : 'text-slate-600'
+                      }`}
+                    >
+                      {consumption === null ? EMPTY_VALUE : formatPercent(consumption)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-xs text-slate-600">
+                      {formatCurrency(project.budget)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </TableScroll>
       )}
     </section>
   );

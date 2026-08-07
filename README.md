@@ -22,6 +22,8 @@ Este repositório contém o **frontend** da plataforma. O backend (Node.js + Exp
 - [Regras de negócio](#regras-de-negócio)
 - [Indicadores derivados](#indicadores-derivados)
 - [Requisitos funcionais](#requisitos-funcionais)
+- [Usabilidade e acessibilidade](#usabilidade-e-acessibilidade)
+- [Dados de demonstração e validação](#dados-de-demonstração-e-validação)
 - [Escopo do MVP](#escopo-do-mvp)
 - [Protótipo](#protótipo)
 - [Documentação do projeto](#documentação-do-projeto)
@@ -42,16 +44,16 @@ Este repositório contém o **frontend** da plataforma. O backend (Node.js + Exp
 
 ## Status atual
 
-O projeto está na **Fase 0 → Fase 1**. O scaffold está pronto e verificado; as telas começam a ser implementadas em seguida.
+**MVP completo.** RF01 a RF09 implementados e integrados ao backend real, com 217 testes automatizados verdes.
 
 | Fase | Escopo | Status |
 |---|---|---|
-| **Fase 0** — Fundação | Scaffold, casca da aplicação, cliente HTTP | scaffold concluído |
-| **Fase 1** — Domínio e dados | Tipos, indicadores testados, serviços, dados mock | pendente |
-| **Fase 2** — Projetos | Lista, detalhes, cadastro e edição (RF03–RF06) | pendente |
-| **Fase 3** — Cadastros auxiliares | Clientes, equipes, usuários (RF01, RF02) | pendente |
-| **Fase 4** — Dashboard | Indicadores, gráficos, painel de atenção (RF07–RF09) | pendente |
-| **Fase 5** — Integração e fechamento | API real, usabilidade, dados de demonstração | pendente |
+| **Fase 0** — Fundação | Scaffold, casca da aplicação, cliente HTTP | concluída |
+| **Fase 1** — Domínio e dados | Tipos, indicadores testados, serviços, fixtures | concluída |
+| **Fase 2** — Projetos | Lista, detalhes, cadastro e edição (RF03–RF06) | concluída |
+| **Fase 3** — Cadastros auxiliares | Clientes, equipes, usuários (RF01, RF02) | concluída |
+| **Fase 4** — Dashboard | Indicadores, gráficos, painel de atenção (RF07–RF09) | concluída |
+| **Fase 5** — Integração e fechamento | API real, usabilidade, dados de demonstração | concluída |
 
 O detalhamento de cada fatia, com critério de "pronto quando", está em [docs/BACKLOG.md](docs/BACKLOG.md).
 
@@ -91,12 +93,27 @@ A aplicação fica disponível em `http://localhost:5173`.
 
 Variáveis de ambiente (ver [.env.example](.env.example)):
 
-| Variável | Descrição |
-|---|---|
-| `VITE_API_URL` | URL base da API REST do backend |
-| `VITE_USE_MOCK` | `true` faz o front rodar sobre dados fictícios locais, sem backend |
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:3333` | URL base da API REST do backend. **Porta 3333**, não 3000 |
+| `VITE_USE_MOCK` | `false` | `true` serve respostas gravadas da API, sem backend no ar |
+| `VITE_MOCK_SCENARIO` | `padrao` | Só com `VITE_USE_MOCK=true`: `padrao`, `vazio` ou `erro` |
 
-Enquanto o backend não estiver disponível, mantenha `VITE_USE_MOCK=true` — ver [ADR-0001](docs/decisions/ADR-0001-mock-primeiro.md).
+### Com o backend no ar (modo normal)
+
+Suba o backend primeiro e confirme que `GET http://localhost:3333/projects` responde.
+
+> ⚠️ **A falha mais provável na primeira execução é CORS, não código.** A porta em que o Vite subiu precisa estar em `CORS_ORIGIN` no `.env` do **backend**. Se a 5173 já estiver ocupada, o Vite cai silenciosamente na 5174 e o navegador barra todas as chamadas. Confira a porta que o Vite anunciou no terminal antes de investigar qualquer outra coisa.
+
+O banco do backend (Neon, plano gratuito) hiberna por inatividade: a primeira chamada depois de um tempo parado pode demorar cerca de 1,5 s ou responder `503`. O front repete automaticamente — **só em `GET`**, porque de um `503` em escrita não dá para afirmar que o dado não chegou ao banco.
+
+### Sem o backend (demonstração e testes de tela)
+
+```bash
+VITE_USE_MOCK=true npm run dev
+```
+
+A camada de fixture serve **respostas capturadas da API real** e as devolve como DTO, atravessando os mesmos mapeadores da resposta verdadeira — ela não pode divergir do contrato sem quebrar o build ([ADR-0008](docs/decisions/ADR-0008-mock-vira-fixture-de-resposta-real.md)). `VITE_MOCK_SCENARIO` exercita os estados de tela: `vazio` (listas vazias) e `erro` (toda chamada falha).
 
 ## Comandos disponíveis
 
@@ -128,13 +145,14 @@ O alias `@/` aponta para `src/` — por exemplo, `import { Project } from '@/typ
 .
 ├── src/                  # Código da aplicação
 │   ├── components/       # Componentes de apresentação reutilizáveis
-│   ├── domain/           # Regras e cálculos puros (indicadores)
+│   ├── domain/           # Regras e cálculos puros
 │   ├── hooks/            # Orquestração de dados e estado de tela
+│   ├── lib/              # Formatação pt-BR (moeda, data, percentual)
 │   ├── pages/            # Uma página por tela
 │   ├── routes/           # Definição de rotas
 │   ├── services/         # Clientes REST — única camada que fala HTTP
 │   ├── types/            # Tipos de domínio
-│   └── index.css         # Design tokens (cores, raio, fontes)
+│   └── index.css         # Design tokens (cores, raio, fontes, foco visível)
 ├── context/              # Especificação do projeto (fonte da verdade)
 ├── docs/                 # Processo, backlog, lições, decisões (ADRs)
 ├── prototype/            # Protótipo do Figma Make — referência visual
@@ -146,16 +164,16 @@ O alias `@/` aponta para `src/` — por exemplo, `import { Project } from '@/typ
 ```
 Usuário → pages/components → hooks → services → API REST → backend
                                 ↓
-                             domain/  (regras e indicadores, sem I/O)
+                             domain/  (regras e cálculos, sem I/O)
 ```
 
 Responsabilidades, e por que elas importam:
 
-- **`services/`** é a única camada que faz HTTP e o único lugar onde aparece o formato do JSON da API. Isso mantém as telas estáveis se o contrato mudar — ver [ADR-0002](docs/decisions/ADR-0002-contrato-de-dados-e-mapeamento.md).
+- **`services/`** é a única camada que faz HTTP e o único lugar onde aparece o formato do JSON da API. Isso mantém as telas estáveis quando o contrato muda — ver [ADR-0002](docs/decisions/ADR-0002-contrato-de-dados-e-mapeamento.md).
 - **`domain/`** concentra regra e cálculo puros, sem React e sem I/O, o que os torna testáveis isoladamente.
-- **`hooks/`** orquestra dados e estado; **`pages/`** compõe; **`components/`** apresenta.
+- **`hooks/`** orquestra dados e estado; **`pages/`** compõe; **`components/`** apresenta; **`lib/`** formata.
 
-Os indicadores derivados vivem **somente** em `src/domain/indicators.ts`. O motivo é prático: dashboard, lista e detalhes consomem os mesmos números, e cálculos duplicados fazem as telas discordarem entre si — divergência que costuma aparecer só na demonstração.
+**Nenhum indicador é calculado em tela.** O motivo é prático: dashboard, lista e detalhes consomem os mesmos números, e cálculos duplicados fazem as telas discordarem entre si — divergência que costuma aparecer só na demonstração.
 
 ## Modelo de domínio
 
@@ -170,13 +188,17 @@ USERS (1) ──────── (N)┘
 | Entidade | Campos principais |
 |---|---|
 | `users` | `id`, `name`, `email` (único), `role`, `created_at` |
-| `clients` | `id`, `name`, `created_at`, `updated_at` |
-| `teams` | `id`, `name`, `created_at` |
+| `clients` | `id`, `name` (único), `created_at`, `updated_at` |
+| `teams` | `id`, `name` (único), `created_at` |
 | `projects` | `id`, `name`, `client_id`, `objective`, `manager_id`, `team_id`, `start_date`, `deadline`, `budget`, `budget_spent`, `hours_worked`, `status`, `observations`, `created_at`, `updated_at` |
 
-Identificadores são UUID. Relacionamentos: `projects.client_id → clients.id`, `projects.manager_id → users.id`, `projects.team_id → teams.id`.
+Identificadores são UUID. A unicidade de `clients.name` e `teams.name` foi acrescentada durante o desenvolvimento e está justificada em [ADR-0006](docs/decisions/ADR-0006-unicidade-de-nome-nos-cadastros.md).
 
-**Status do projeto** (armazenados como texto, validados na aplicação):
+**Casing.** A API usa `snake_case` e o tipo de domínio do front é `camelCase`; a tradução acontece em **um mapeador por recurso**, dentro de `services/`. Nenhum `snake_case` existe fora dessa camada.
+
+**Forma do projeto.** As relações chegam resolvidas (`client: {id, name}`), não como FK solta, e em duas formas: `ProjectSummary` na lista e `Project` no detalhe. O payload de escrita volta a usar id solto — **o objeto do `GET` não é aceito pelo `PUT`**.
+
+**Status do projeto:**
 
 | Valor | Exibição |
 |---|---|
@@ -186,9 +208,11 @@ Identificadores são UUID. Relacionamentos: `projects.client_id → clients.id`,
 | `CONCLUIDO` | Concluído |
 | `CANCELADO` | Cancelado |
 
+`status` chega da API como `string`, e não como união fechada: ela devolve valor fora dos cinco canônicos de propósito, para denunciar dado corrompido em vez de escondê-lo. Mapas de cor e rótulo têm valor padrão.
+
 **Perfis de usuário:** `GERENTE`, `COORDENADOR`, `GESTOR_PROJETO`.
 
-No MVP o perfil é **dado cadastral**: é registrado e exibido, mas não restringe acesso a funcionalidades (ver RNF03 e [Escopo do MVP](#escopo-do-mvp)).
+No MVP o perfil é **dado cadastral**: é registrado e exibido, mas não restringe acesso a funcionalidade nenhuma (RNF03).
 
 ## Regras de negócio
 
@@ -202,50 +226,92 @@ No MVP o perfil é **dado cadastral**: é registrado e exibido, mas não restrin
 | RN06 | Todo projeto deve possuir cliente, gestor, equipe, objetivo, data de início, prazo, orçamento e status. |
 | RN07 | Com orçamento previsto igual a zero, o percentual de consumo é **indisponível** — nunca zero, infinito ou erro. |
 | RN08 | A verificação de atraso compara **datas de calendário no fuso local**, sem hora. Um projeto cujo prazo é a data atual não está atrasado. |
-| RN09 | Um projeto está em **situação de atenção** quando tem status `EM_RISCO`, **ou** está atrasado, **ou** teve o orçamento excedido. Cada projeto é contado uma única vez. |
+| RN09 | Um projeto está em **situação de atenção** quando está atrasado, **ou** teve o orçamento excedido, **ou** consumiu 90% ou mais do previsto — excluídos os encerrados. Cada projeto é contado uma única vez. |
 
-RN07 a RN09 foram formalizadas durante o desenvolvimento, para resolver ambiguidades que produziriam comportamento divergente entre telas. A análise está em [ADR-0004](docs/decisions/ADR-0004-refinamento-das-regras-de-negocio.md).
+RN07 a RN09 foram formalizadas durante o desenvolvimento, para resolver ambiguidades que produziriam comportamento divergente entre telas ([ADR-0004](docs/decisions/ADR-0004-refinamento-das-regras-de-negocio.md)). A RN09 foi **revista na integração** ([ADR-0007](docs/decisions/ADR-0007-indicadores-vem-do-backend.md)): ganhou o consumo elevado e perdeu o `EM_RISCO` declarado, que virou indicador próprio.
 
-Consequência prática da RN03: estouro de orçamento é **aviso visual**, nunca erro de formulário que impede salvar.
+Duas consequências práticas que costumam surpreender:
+
+- **Estouro de orçamento é aviso visual, nunca erro de formulário que impede salvar** (RN03).
+- **`EM_RISCO` e "em atenção" são coisas diferentes e não se somam.** O primeiro é julgamento manual do gestor; o segundo é derivado. Um projeto pode estar nos dois, e somar os contadores passaria do total da carteira.
 
 ## Indicadores derivados
 
-Nenhum indicador é persistido — todos são calculados pela aplicação a partir dos dados dos projetos.
+Nenhum indicador é persistido. Desde a integração, quem calcula a maior parte deles é o **backend** — o front apresenta e **nunca recalcula**, porque duas implementações divergiriam e a tela mostraria número diferente do que a API afirma ([ADR-0007](docs/decisions/ADR-0007-indicadores-vem-do-backend.md)).
 
-| Indicador | Cálculo |
+**Vêm prontos da API, em `project.indicators`:**
+
+| Indicador | Regra |
 |---|---|
-| Consumo do orçamento | `budget_spent / budget × 100`; indisponível se `budget = 0` (RN07) |
-| Projeto atrasado | prazo anterior à data atual (RN08) **e** status diferente de `CONCLUIDO`/`CANCELADO` |
-| Orçamento excedido | `budget_spent > budget` |
-| Situação de atenção | `EM_RISCO` ∪ atrasado ∪ orçamento excedido, sem duplicidade (RN09) |
+| `consumptionPercent` | `budget_spent / budget × 100`; **`null`** quando `budget = 0` (RN07) |
+| `isLate` | prazo vencido com o projeto ativo; prazo igual a hoje **não** atrasa (RN08) |
+| `isOverBudget` | `budget_spent > budget` |
+| `hasHighConsumption` | consumo ≥ 90% — aviso antes do estouro |
+| `needsAttention` + `attentionReasons` | RN09, cada projeto uma vez |
 
-Agregados do dashboard: total de projetos, projetos por status, projetos por cliente, orçamento total e consumido, percentual de consumo, horas realizadas, projetos em atenção e atrasados.
+**Calculados no front, em `src/domain/indicators.ts`** — o que a API não devolve, e continua com fonte única pelo mesmo motivo:
+
+`budgetRemaining`, `budgetOverrunPercent`, `daysUntilDeadline`, `scheduleProgressPercent`, e os agregados `summarizeProjects`, `aggregateByClient`, `topProjectsByHours`.
+
+O dashboard sai todo de `GET /projects`. Os endpoints `GET /dashboard` e `GET /projects/attention` existem e **não são usados**: não trazem orçamento por cliente nem horas por projeto, que dois dos gráficos do RF08 precisam, e misturar as duas fontes colocaria dois números discordantes na mesma tela. Os nove agregados que o front deriva foram conferidos número a número contra `GET /dashboard` com a API no ar.
 
 ## Requisitos funcionais
 
-| ID | Requisito |
-|---|---|
-| RF01 | Cadastrar usuário com nome, e-mail e perfil de acesso |
-| RF02 | Cadastrar cliente |
-| RF03 | Cadastrar projeto com nome, cliente, objetivo, gestor, equipe, data de início, prazo, orçamento previsto, orçamento consumido, horas realizadas, status e observações |
-| RF04 | Consultar a lista de projetos |
-| RF05 | Consultar os detalhes de um projeto |
-| RF06 | Atualizar as informações de um projeto |
-| RF07 | Calcular e exibir indicadores dos projetos |
-| RF08 | Exibir dashboard gerencial com indicadores e gráficos |
-| RF09 | Identificar e destacar projetos em situação de risco |
+| ID | Requisito | Onde |
+|---|---|---|
+| RF01 | Cadastrar usuário com nome, e-mail e perfil de acesso | `/users` |
+| RF02 | Cadastrar cliente | `/clients` |
+| RF03 | Cadastrar projeto | `/projects/new` |
+| RF04 | Consultar a lista de projetos | `/projects` |
+| RF05 | Consultar os detalhes de um projeto | `/projects/:id` |
+| RF06 | Atualizar as informações de um projeto | `/projects/:id/edit` |
+| RF07 | Calcular e exibir indicadores dos projetos | `/` (cards) |
+| RF08 | Exibir dashboard gerencial com indicadores e gráficos | `/` (gráficos) |
+| RF09 | Identificar e destacar projetos em situação de risco | `/` (painel), `/projects`, `/projects/:id` |
 
-Requisitos não funcionais (usabilidade, desempenho, segurança, manutenibilidade e integridade) estão em [context/01_requisitos_funcionais_e_nao_funcionais.md](context/01_requisitos_funcionais_e_nao_funcionais.md).
+Equipes têm tela própria (`/teams`), como cadastro de apoio ao RF03.
+
+Requisitos não funcionais estão em [context/01_requisitos_funcionais_e_nao_funcionais.md](context/01_requisitos_funcionais_e_nao_funcionais.md).
+
+## Usabilidade e acessibilidade
+
+Atende ao RNF01 (usabilidade) e ao RNF02 (desempenho). O que foi feito, e por quê:
+
+- **Responsividade.** A partir de `lg` a navegação é a coluna fixa do protótipo; abaixo disso vira gaveta aberta por uma barra superior — 224 px de coluna fixa em um aparelho de 375 px deixariam a tabela com menos de metade da largura útil. Fechada, a gaveta sai do fluxo (`display: none`), para o Tab não percorrer uma navegação invisível.
+- **Tabelas.** Sete colunas não cabem em 375 px. Em vez de espremer ou esconder coluna — que tira informação de quem está no celular —, a tabela rola horizontalmente dentro de uma região que é alcançável pelo teclado e tem nome e papel.
+- **Foco visível.** Um contorno único, declarado em `src/index.css`, para tudo que recebe foco. Sobre a sidebar escura ele é branco: o azul do tema fica em 3,4:1 contra `slate-900`.
+- **Contraste.** Texto de apoio usa `slate-500` sobre fundo claro (4,8:1) e `slate-400` sobre o fundo escuro da sidebar (6,9:1) — os tons do protótipo reprovavam em texto pequeno. Os cards de indicador abandonaram a opacidade do protótipo pelo mesmo motivo.
+- **Título por tela.** Em aplicação de página única a navegação não recarrega a página; sem trocar o `<title>`, quem usa leitor de tela não é avisado de que mudou de tela.
+- **Sinal nunca só por cor.** Atraso, estouro e motivo de atenção aparecem em texto ("Atrasado", "Orç. excedido"), não apenas em vermelho.
+- **Gráficos.** Os SVG do Recharts vão como `aria-hidden` — eles não são navegáveis por leitor de tela — e os mesmos números estão em texto nos cards, em uma lista `sr-only` de status e na tabela do RF09.
+- **Estados de tela.** Cada tela distingue **carregando**, **erro** (com "Tentar novamente"), **lista vazia** e **recorte vazio por filtro**. O formulário de projeto tem um quinto estado: base sem os cadastros de apoio, que diz o que falta e leva até a tela que resolve.
+- **Desempenho.** As duas rotas que usam Recharts saem do pacote inicial por `React.lazy`, o que derruba o pacote de entrada de 715 kB (208 kB gzip) para cerca de 300 kB (91 kB gzip). As demais telas continuam no pacote inicial de propósito: dividir todas trocaria um download grande por um piscar de "carregando" a cada navegação.
+
+## Dados de demonstração e validação
+
+Os dados do MVP são **fictícios e inseridos manualmente**.
+
+Para a demonstração valer alguma coisa, a carteira precisa conter os casos que fazem indicador mentir quando não estão tratados — não basta volume:
+
+| Caso | Como montar | O que precisa aparecer |
+|---|---|---|
+| Orçamento previsto zero, com consumo | `budget = 0`, `budget_spent > 0` | Consumo "—", nunca "0%" nem "∞%" |
+| Prazo vencendo hoje | `deadline` = data de hoje, status ativo | **Não** aparece como atrasado |
+| Prazo vencido ontem | `deadline` = véspera, status ativo | Aparece como atrasado |
+| Encerrado depois do prazo | `deadline` no passado, status `CONCLUIDO` | **Não** aparece como atrasado nem em atenção |
+| Orçamento estourado | `budget_spent > budget` | Salva com aviso, não com erro |
+
+O roteiro completo da avaliação com profissionais de gestão — participantes, preparação, tarefas cronometradas, perguntas abertas, questionário e limitações a declarar — está em **[docs/ROTEIRO_VALIDACAO.md](docs/ROTEIRO_VALIDACAO.md)**.
 
 ## Escopo do MVP
 
-**Incluído:** cadastro de usuários, clientes e equipes; cadastro, consulta, atualização e detalhamento de projetos; dashboard gerencial com indicadores; usuário logado simulado; dados fictícios.
+**Incluído:** cadastro de usuários, clientes e equipes; cadastro, consulta, atualização e detalhamento de projetos; dashboard gerencial com indicadores e gráficos; usuário logado simulado; dados fictícios.
 
 **Fora de escopo** — não implementado por decisão de projeto:
 
 - Autenticação e autorização reais (o usuário logado é simulado)
 - Controle de acesso efetivo por perfil
-- NPS
+- NPS e pesquisa de satisfação embarcada
 - Timesheet individual (apenas o total de horas por projeto)
 - Gestão individual de membros de equipe
 - Integrações corporativas e importação automática de dados
@@ -270,7 +336,7 @@ O protótipo funcional, construído no Figma Make e validado visualmente, está 
 Ao portar uma tela do protótipo:
 
 - **Portar:** layout, hierarquia visual, cores de status, formatação em pt-BR, textos.
-- **Não portar:** navegação por `useState` (usamos rotas), cálculos de indicador dentro de componentes (vão para `domain/`), campos em `snake_case` no tipo de domínio, e os defeitos conhecidos de divisão por zero e comparação de data em UTC que o protótipo contém.
+- **Não portar:** navegação por `useState` (usamos rotas), cálculos de indicador dentro de componentes, campos em `snake_case` no tipo de domínio, e os defeitos conhecidos de divisão por zero e comparação de data em UTC que o protótipo contém.
 
 Os design tokens dele (Inter, DM Mono, `--primary: #2563eb`, raio de 6px) foram portados para `src/index.css`.
 
@@ -278,13 +344,14 @@ Os design tokens dele (Inter, DM Mono, `--primary: #2563eb`, raio de 6px) foram 
 
 | Diretório | Conteúdo |
 |---|---|
-| [context/](context/) | **Especificação — fonte da verdade.** Requisitos, arquitetura, modelo de dados. Os `.docx`/`.pdf` são as fontes originais, mantidas para rastreabilidade acadêmica e imutáveis; edite os `.md`. |
+| [context/](context/) | **Especificação — fonte da verdade.** Requisitos, arquitetura, modelo de dados e o contrato real da API. Os `.docx`/`.pdf` são as fontes originais, mantidas para rastreabilidade acadêmica e imutáveis; edite os `.md`. |
 | [docs/HARNESS.md](docs/HARNESS.md) | Processo de desenvolvimento: ciclo de tarefa, guardrails, Definition of Done |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Backlog fatiado, rastreado até os requisitos funcionais |
 | [docs/LESSONS.md](docs/LESSONS.md) | Lições aprendidas e armadilhas conhecidas do domínio e da stack |
+| [docs/ROTEIRO_VALIDACAO.md](docs/ROTEIRO_VALIDACAO.md) | Roteiro da avaliação com profissionais de gestão |
 | [docs/decisions/](docs/decisions/) | Registro de decisões de arquitetura (ADRs) |
 
-Decisões registradas até aqui:
+Decisões registradas:
 
 | ADR | Decisão |
 |---|---|
@@ -292,6 +359,10 @@ Decisões registradas até aqui:
 | [0002](docs/decisions/ADR-0002-contrato-de-dados-e-mapeamento.md) | Contrato de dados isolado em `services/` com mapeamento explícito |
 | [0003](docs/decisions/ADR-0003-ui-tailwind-em-vez-de-mui.md) | Tailwind CSS v4 como camada de UI, em vez de MUI |
 | [0004](docs/decisions/ADR-0004-refinamento-das-regras-de-negocio.md) | Refinamento das regras de negócio (RF03, RNF03, RN06, RN07–RN09) |
+| [0005](docs/decisions/ADR-0005-camada-lib-de-formatacao.md) | Camada `lib/` para formatação pt-BR, separada de `domain/` |
+| [0006](docs/decisions/ADR-0006-unicidade-de-nome-nos-cadastros.md) | Nome único em clientes e equipes |
+| [0007](docs/decisions/ADR-0007-indicadores-vem-do-backend.md) | Indicadores calculados pelo backend; RN09 revista |
+| [0008](docs/decisions/ADR-0008-mock-vira-fixture-de-resposta-real.md) | Mock passa a servir respostas reais capturadas, em DTO |
 
 ## Fluxo de desenvolvimento
 
@@ -315,17 +386,19 @@ Detalhes em [docs/HARNESS.md](docs/HARNESS.md).
 
 ## Integração com o backend
 
-O backend é um repositório separado, com a organização `Routes → Controllers → Services → Prisma`, sobre PostgreSQL. A comunicação é REST/JSON.
+O backend é um repositório separado, com a organização `Routes → Controllers → Services → Prisma`, sobre PostgreSQL. A comunicação é REST/JSON, na porta **3333**.
 
 ```
 Frontend React → API REST → Express → Prisma → PostgreSQL
 ```
 
-Pontos abertos a confirmar com o backend antes da integração (Fase 5):
+O contrato real está em [context/CONTRATO_API.md](context/CONTRATO_API.md), extraído do backend pronto. Onde ele contradisser os outros documentos de `context/`, ele vence.
 
-- **Casing do JSON.** A modelagem usa `snake_case` (`budget_spent`); um trecho dos requisitos usa `budgetSpent`. O front trata isso com um mapeador único por recurso em `services/`, então a definição afeta apenas essa camada — ver [ADR-0002](docs/decisions/ADR-0002-contrato-de-dados-e-mapeamento.md).
-- **Formato das datas.** `YYYY-MM-DD` ou ISO completo — impacta a aplicação da RN08.
-- **Indicadores.** Se o backend também calcular indicadores, precisa seguir RN07 e RN08 para não divergir do front.
+**O que a integração revelou** — e que vale para quem for planejar a próxima:
+
+- A divergência cara não foi de **casing**, que o mapeador por recurso já cobria, e sim de **responsabilidade**: a API resolve as relações na resposta, calcula os indicadores e tem duas formas de projeto. Isso não muda um mapeador — muda o tipo de domínio, os hooks e o que `domain/` ainda tem o direito de calcular ([L-007](docs/LESSONS.md)).
+- Erros seguem o formato `{ erro, detalhes? }`. Quando há `detalhes`, ele vem legível campo a campo e é o que a tela mostra, porque diz **qual** campo corrigir.
+- Escrita comprovada com a API no ar: payload montado pelo front aceito no `PUT` (200) enquanto o objeto cru do `GET` é recusado (400); estouro de orçamento aceito (201, RN03); prazo invertido recusado (400, RN05); reabertura de projeto `CONCLUIDO` recusada (400); nome de cliente repetido com caixa diferente respondendo 409.
 
 ---
 

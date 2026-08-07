@@ -48,7 +48,9 @@ Os requisitos funcionais definem as principais funcionalidades previstas para o 
 | RN06 | Todo projeto deve possuir cliente, gestor, equipe, objetivo, data de inicio, prazo, orcamento e status. |
 | RN07 | Quando o orcamento previsto for igual a zero, o percentual de consumo nao e calculavel e deve ser apresentado como indisponivel, nunca como zero, infinito ou erro. |
 | RN08 | A verificacao de atraso compara datas de calendario, sem considerar hora, no fuso local do usuario. Um projeto cujo prazo e a data atual nao esta atrasado. |
-| RN09 | Um projeto esta em situacao de atencao quando possui status EM_RISCO, ou esta atrasado conforme RN08, ou teve o orcamento consumido superior ao previsto. Um projeto que atenda a mais de uma condicao e contado uma unica vez. |
+| RN09 | Um projeto esta em situacao de atencao quando esta atrasado conforme RN08, ou teve o orcamento consumido superior ao previsto, ou consumiu 90% ou mais do orcamento previsto. Projeto encerrado (CONCLUIDO ou CANCELADO) nunca entra. Um projeto que atenda a mais de uma condicao e contado uma unica vez. Revisto na integracao com a API; ver docs/decisions/ADR-0007. |
+| RN10 | O status EM_RISCO e julgamento manual do gestor e e apresentado como indicador proprio, separado da situacao de atencao da RN09. Somar os dois produziria numero maior que o total da carteira. |
+| RN11 | Os status CONCLUIDO e CANCELADO sao terminais: o projeto encerrado nao volta para outro status. A interface nao oferece a troca. |
 
 ## 5. Indicadores Derivados
 
@@ -57,6 +59,11 @@ Os requisitos funcionais definem as principais funcionalidades previstas para o 
 | Consumo do orcamento | orcamento consumido / orcamento previsto x 100; indisponivel quando o previsto e zero (RN07) | Percentual do orcamento previsto que ja foi consumido. |
 | Projeto atrasado | data atual > prazo, comparando datas de calendario no fuso local (RN08), e status diferente de CONCLUIDO/CANCELADO | Identifica projetos cujo prazo foi ultrapassado. |
 | Orcamento excedido | orcamento consumido > orcamento previsto | Identifica projetos cujo consumo ultrapassou o orcamento previsto. |
-| Projeto em situacao de atencao | status EM_RISCO, ou atrasado, ou com orcamento excedido, sem duplicidade (RN09) | Concentra em um unico indicador os projetos que exigem acao gerencial. |
+| Consumo elevado | consumo maior ou igual a 90% do previsto | Avisa antes do estouro, enquanto ainda ha o que corrigir. |
+| Projeto em situacao de atencao | atrasado, ou com orcamento excedido, ou com consumo elevado, sem duplicidade e excluindo encerrados (RN09) | Concentra em um unico indicador os projetos que exigem acao gerencial. |
+
+Estes indicadores sao calculados pelo **backend** e chegam prontos em cada resposta de projeto. O frontend os apresenta e nao os recalcula: duas implementacoes da mesma regra divergiriam, e a interface mostraria numero diferente do que a API afirma. Registrado em docs/decisions/ADR-0007. O contrato da API esta em context/CONTRATO_API.md.
+
+A numeracao de RN deste documento e a do repositorio do backend sao **independentes e colidentes**: o RN07 daqui e orcamento zero, o RN07 de la e status terminal. Ao ler o contrato, confira de qual lista a regra e.
 
 Os indicadores derivados nao serao armazenados diretamente no banco de dados. Eles serao calculados pela aplicacao a partir dos dados dos projetos.

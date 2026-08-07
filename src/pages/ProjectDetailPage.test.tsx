@@ -5,22 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatCalendarDate } from '@/domain/indicators';
 import ProjectDetailPage from '@/pages/ProjectDetailPage';
 import { HttpError } from '@/services/http';
-import type { Client } from '@/types/client';
+import { makeIndicators, makeProject as buildProject } from '@/test/factories';
 import type { Project } from '@/types/project';
-import type { Team } from '@/types/team';
-import type { User } from '@/types/user';
 
 vi.mock('@/services/projects', () => ({ getProject: vi.fn() }));
-vi.mock('@/services/clients', () => ({ listClients: vi.fn() }));
-vi.mock('@/services/users', () => ({ listUsers: vi.fn() }));
-vi.mock('@/services/teams', () => ({ listTeams: vi.fn() }));
 
 const { getProject } = await import('@/services/projects');
-const { listClients } = await import('@/services/clients');
-const { listUsers } = await import('@/services/users');
-const { listTeams } = await import('@/services/teams');
-
-const TIMESTAMP = '2026-01-05T09:00:00.000Z';
 
 function daysFromToday(days: number): string {
   const date = new Date();
@@ -28,48 +18,23 @@ function daysFromToday(days: number): string {
   return formatCalendarDate(date);
 }
 
-const clients: Client[] = [
-  { id: 'cli-01', name: 'Alfa Logística', createdAt: TIMESTAMP, updatedAt: TIMESTAMP },
-];
-
-const users: User[] = [
-  {
-    id: 'usr-01',
-    name: 'Bruno Tavares',
-    email: 'bruno@exemplo.com.br',
-    role: 'GESTOR_PROJETO',
-    createdAt: TIMESTAMP,
-  },
-];
-
-const teams: Team[] = [{ id: 'team-01', name: 'Squad Plataforma', createdAt: TIMESTAMP }];
-
+/**
+ * A carga do detalhe é uma chamada só desde a integração (ADR-0007): a API já
+ * devolve cliente, gestor e equipe resolvidos e os indicadores calculados.
+ */
 function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
-    id: 'prj-01',
-    name: 'Portal do Cliente',
-    clientId: 'cli-01',
-    objective: 'Centralizar o atendimento em um canal único.',
-    managerId: 'usr-01',
-    teamId: 'team-01',
+  return buildProject({
     startDate: daysFromToday(-100),
     deadline: daysFromToday(100),
     budget: 400_000,
     budgetSpent: 100_000,
     hoursWorked: 1_240,
-    status: 'EM_ANDAMENTO',
-    observations: null,
-    createdAt: TIMESTAMP,
-    updatedAt: TIMESTAMP,
     ...overrides,
-  };
+  });
 }
 
 function mockData(project: Project) {
   vi.mocked(getProject).mockResolvedValue(project);
-  vi.mocked(listClients).mockResolvedValue(clients);
-  vi.mocked(listUsers).mockResolvedValue(users);
-  vi.mocked(listTeams).mockResolvedValue(teams);
 }
 
 function renderDetail(id = 'prj-01') {
@@ -102,6 +67,17 @@ describe('ProjectDetailPage (RF05)', () => {
     expect(await screen.findByRole('heading', { name: 'Portal do Cliente' })).toBeInTheDocument();
   });
 
+  it('leva à edição do projeto (F2-4)', async () => {
+    mockData(makeProject());
+    renderDetail();
+    await screen.findByRole('heading', { name: 'Portal do Cliente' });
+
+    expect(screen.getByRole('link', { name: 'Editar projeto' })).toHaveAttribute(
+      'href',
+      '/projects/prj-01/edit'
+    );
+  });
+
   it('exibe todos os campos do projeto com os nomes resolvidos', async () => {
     mockData(makeProject({ observations: 'Homologação pendente com o parceiro.' }));
     renderDetail();
@@ -110,8 +86,6 @@ describe('ProjectDetailPage (RF05)', () => {
     expect(valueOf('Cliente')).toBe('Alfa Logística');
     expect(valueOf('Gestor responsável')).toBe('Bruno Tavares');
     expect(valueOf('Equipe')).toBe('Squad Plataforma');
-    // `role` é dado cadastral exibido, nunca controle de acesso (A-007).
-    expect(valueOf('Perfil do gestor')).toBe('Gestor de Projeto');
     expect(screen.getByText('Centralizar o atendimento em um canal único.')).toBeInTheDocument();
     expect(screen.getByText('Homologação pendente com o parceiro.')).toBeInTheDocument();
     expect(screen.getByText('1.240')).toBeInTheDocument();
@@ -136,7 +110,13 @@ describe('ProjectDetailPage (RF05)', () => {
     unmount();
 
     // RN03: estouro é permitido e precisa aparecer, com o valor excedido.
-    mockData(makeProject({ budget: 200_000, budgetSpent: 250_000 }));
+    mockData(
+      makeProject({
+        budget: 200_000,
+        budgetSpent: 250_000,
+        indicators: makeIndicators({ consumptionPercent: 125, isOverBudget: true }),
+      })
+    );
     renderDetail();
     await screen.findByRole('heading', { name: 'Portal do Cliente' });
 
@@ -145,7 +125,9 @@ describe('ProjectDetailPage (RF05)', () => {
   });
 
   it('alerta o atraso com o número de dias (RN08)', async () => {
-    mockData(makeProject({ deadline: daysFromToday(-3) }));
+    mockData(
+      makeProject({ deadline: daysFromToday(-3), indicators: makeIndicators({ isLate: true }) })
+    );
     renderDetail();
     await screen.findByRole('heading', { name: 'Portal do Cliente' });
 
@@ -180,23 +162,67 @@ describe('ProjectDetailPage (RF05)', () => {
     expect(screen.getByText('vence hoje')).toBeInTheDocument();
   });
 
-  it('avisa "em risco" só quando não há atraso nem estouro', async () => {
+  it('avisa "em risco" sempre que o gestor declarou, mesmo com atraso junto', async () => {
     mockData(makeProject({ status: 'EM_RISCO' }));
     const { unmount } = renderDetail();
     await screen.findByRole('heading', { name: 'Portal do Cliente' });
     expect(screen.getByText(/classificado como Em risco/)).toBeInTheDocument();
     unmount();
 
-    // Com atraso junto, o aviso genérico daria ruído sobre a causa concreta.
-    mockData(makeProject({ status: 'EM_RISCO', deadline: daysFromToday(-5) }));
+    // O risco declarado não deixa de valer porque há atraso: são coisas
+    // diferentes, e o contrato as mantém separadas (ADR-0007).
+    mockData(
+      makeProject({
+        status: 'EM_RISCO',
+        deadline: daysFromToday(-5),
+        indicators: makeIndicators({ isLate: true }),
+      })
+    );
     renderDetail();
     await screen.findByRole('heading', { name: 'Portal do Cliente' });
-    expect(screen.queryByText(/classificado como Em risco/)).not.toBeInTheDocument();
+    expect(screen.getByText(/classificado como Em risco/)).toBeInTheDocument();
     expect(screen.getByText(/Projeto atrasado/)).toBeInTheDocument();
   });
 
+  // Indicador novo do contrato: 90% ou mais sem ter estourado ainda.
+  it('avisa consumo elevado antes do estouro, e cala depois dele', async () => {
+    mockData(
+      makeProject({
+        budget: 100_000,
+        budgetSpent: 92_000,
+        indicators: makeIndicators({ consumptionPercent: 92, hasHighConsumption: true }),
+      })
+    );
+    const { unmount } = renderDetail();
+    await screen.findByRole('heading', { name: 'Portal do Cliente' });
+    expect(screen.getByText(/Consumo do orçamento em 92,0%/)).toBeInTheDocument();
+    unmount();
+
+    mockData(
+      makeProject({
+        budget: 100_000,
+        budgetSpent: 150_000,
+        indicators: makeIndicators({
+          consumptionPercent: 150,
+          hasHighConsumption: true,
+          isOverBudget: true,
+        }),
+      })
+    );
+    renderDetail();
+    await screen.findByRole('heading', { name: 'Portal do Cliente' });
+    // O alerta de estouro já diz o mesmo, com mais precisão.
+    expect(screen.queryByText(/Consumo do orçamento em/)).not.toBeInTheDocument();
+  });
+
   it('sem orçamento previsto mostra "—" no consumo, nunca NaN (RN07)', async () => {
-    mockData(makeProject({ budget: 0, budgetSpent: 0 }));
+    mockData(
+      makeProject({
+        budget: 0,
+        budgetSpent: 0,
+        indicators: makeIndicators({ consumptionPercent: null }),
+      })
+    );
     renderDetail();
     await screen.findByRole('heading', { name: 'Portal do Cliente' });
 
@@ -219,9 +245,6 @@ describe('ProjectDetailPage (RF05)', () => {
     vi.mocked(getProject).mockRejectedValue(
       new HttpError('client', 'Projeto não encontrado.', 404)
     );
-    vi.mocked(listClients).mockResolvedValue(clients);
-    vi.mocked(listUsers).mockResolvedValue(users);
-    vi.mocked(listTeams).mockResolvedValue(teams);
     renderDetail('inexistente');
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Projeto não encontrado.');

@@ -2,27 +2,26 @@
  * Detalhes de um projeto (RF05) — layout portado de `ProjectDetail.tsx` do
  * protótipo, que também é onde o RF09 fica mais explícito: os alertas do topo.
  *
- * Todos os números vêm de `domain/indicators.ts`. O protótipo calcula dias,
- * progresso e saldo dentro do componente, com os defeitos A-001 (divisão por
- * orçamento zero) e A-002 (datas em UTC); aqui isso é chamada de função.
+ * Nenhum número nasce aqui. Atraso, consumo e estouro vêm calculados pelo
+ * backend em `project.indicators` (ADR-0007); dias até o prazo, progresso do
+ * período e saldo vêm de `domain/indicators.ts`, que cobre o que a API não
+ * manda. O protótipo calcula os três dentro do componente e traz junto os
+ * defeitos A-001 (divisão por orçamento zero) e A-002 (datas em UTC).
  */
 
 import { Link, useParams } from 'react-router-dom';
 import { RadialBar, RadialBarChart, ResponsiveContainer } from 'recharts';
 import StatusBadge from '@/components/projects/StatusBadge';
 import {
-  budgetConsumptionPercent,
   budgetOverrunPercent,
   budgetRemaining,
   daysUntilDeadline,
-  isLate,
-  isOverBudget,
   scheduleProgressPercent,
 } from '@/domain/indicators';
-import { useProject, type ProjectDetail } from '@/hooks/useProject';
+import { useProject } from '@/hooks/useProject';
 import { EMPTY_VALUE, formatCurrency, formatDate, formatNumber, formatPercent } from '@/lib/format';
-import { paths } from '@/routes/paths';
-import { userRoleLabels } from '@/types/user';
+import { paths, projectEditPath } from '@/routes/paths';
+import type { Project } from '@/types/project';
 
 const cardClass = 'rounded-lg border border-slate-200 bg-white p-4';
 const cardTitleClass =
@@ -30,7 +29,7 @@ const cardTitleClass =
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { detail, isLoading, error, reload } = useProject(id);
+  const { project, isLoading, error, reload } = useProject(id);
 
   if (isLoading) {
     return (
@@ -43,7 +42,7 @@ export default function ProjectDetailPage() {
     );
   }
 
-  if (error !== null || detail === null) {
+  if (error !== null || project === null) {
     return (
       <div className="flex-1 overflow-auto p-6">
         <BackLink />
@@ -64,15 +63,17 @@ export default function ProjectDetailPage() {
     );
   }
 
-  return <ProjectDetailView detail={detail} />;
+  return <ProjectDetailView project={project} />;
 }
 
-function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
-  const { project, clientName, managerName, managerRole, teamName } = detail;
-
-  const late = isLate(project);
-  const overBudget = isOverBudget(project);
-  const consumption = budgetConsumptionPercent(project);
+function ProjectDetailView({ project }: { project: Project }) {
+  // Atraso, consumo e estouro são do backend (ADR-0007); o resto é derivado
+  // aqui porque a API não devolve.
+  const {
+    isLate: late,
+    isOverBudget: overBudget,
+    consumptionPercent: consumption,
+  } = project.indicators;
   const overrun = budgetOverrunPercent(project);
   const remaining = budgetRemaining(project);
   const daysLeft = daysUntilDeadline(project);
@@ -80,7 +81,7 @@ function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
 
   return (
     <div className="flex-1 overflow-auto p-6">
-      <div className="mb-5 flex items-start gap-3">
+      <div className="mb-5 flex flex-wrap items-start gap-3">
         <BackLink />
         <div aria-hidden="true" className="h-5 w-px bg-slate-200" />
         <div>
@@ -88,8 +89,14 @@ function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
             <h1 className="text-xl font-semibold text-slate-900">{project.name}</h1>
             <StatusBadge status={project.status} />
           </div>
-          <p className="mt-0.5 text-sm text-slate-500">{clientName ?? EMPTY_VALUE}</p>
+          <p className="mt-0.5 text-sm text-slate-500">{project.client.name}</p>
         </div>
+        <Link
+          className="ml-auto rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          to={projectEditPath(project.id)}
+        >
+          Editar projeto
+        </Link>
       </div>
 
       {/* Painel de atenção do projeto (RF09). */}
@@ -106,7 +113,14 @@ function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
             {formatNumber(Math.abs(daysLeft))} {Math.abs(daysLeft) === 1 ? 'dia' : 'dias'}.
           </Alert>
         )}
-        {project.status === 'EM_RISCO' && !overBudget && !late && (
+        {/* Consumo elevado só vira aviso quando ainda não estourou: depois do
+            estouro, o alerta acima já diz o mesmo com mais precisão. */}
+        {project.indicators.hasHighConsumption && !overBudget && (
+          <Alert tone="warning">
+            Consumo do orçamento em {formatPercent(consumption)} — acima de 90% do previsto.
+          </Alert>
+        )}
+        {project.status === 'EM_RISCO' && (
           <Alert tone="warning">Projeto classificado como Em risco pelo gestor responsável.</Alert>
         )}
       </div>
@@ -116,14 +130,9 @@ function ProjectDetailView({ detail }: { detail: ProjectDetail }) {
           <section className={cardClass}>
             <h2 className={cardTitleClass}>Informações gerais</h2>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
-              <InfoRow label="Cliente" value={clientName ?? EMPTY_VALUE} />
-              <InfoRow label="Gestor responsável" value={managerName ?? EMPTY_VALUE} />
-              <InfoRow label="Equipe" value={teamName ?? EMPTY_VALUE} />
-              <InfoRow
-                label="Perfil do gestor"
-                mono
-                value={managerRole === null ? EMPTY_VALUE : userRoleLabels[managerRole]}
-              />
+              <InfoRow label="Cliente" value={project.client.name} />
+              <InfoRow label="Gestor responsável" value={project.manager.name} />
+              <InfoRow label="Equipe" value={project.team.name} />
               <InfoRow label="Data de início" mono value={formatDate(project.startDate)} />
               <InfoRow
                 highlight={late}

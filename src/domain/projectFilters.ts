@@ -10,9 +10,7 @@
  * quem usa a tela.
  */
 
-import type { Client } from '@/types/client';
-import type { Project, ProjectStatus } from '@/types/project';
-import type { User } from '@/types/user';
+import type { ProjectStatus, ProjectSummary } from '@/types/project';
 
 /** Estado dos controles da tela. String vazia = filtro não aplicado. */
 export interface ProjectFilters {
@@ -27,43 +25,39 @@ export const emptyProjectFilters: ProjectFilters = {
   clientId: '',
 };
 
-/** Nomes usados pela busca textual; sem eles o filtro só olha o nome do projeto. */
-export interface ProjectFilterLookups {
-  clients: readonly Client[];
-  users: readonly User[];
-}
-
 export function hasActiveFilters(filters: ProjectFilters): boolean {
   return filters.search.trim() !== '' || filters.status !== '' || filters.clientId !== '';
 }
 
 /**
- * Aplica os três filtros em conjunto (E lógico), preservando a ordem de entrada.
+ * Aplica os três filtros em conjunto (E lógico), preservando a ordem de entrada
+ * — que vem da API por prazo crescente, o que vence antes primeiro.
+ *
+ * O recorte acontece **no cliente**, mesmo com a API aceitando `?status=` e
+ * `?client_id=`: a busca textual não tem equivalente no servidor, e filtrar
+ * metade aqui e metade lá daria dois comportamentos diferentes na mesma barra
+ * de filtros — um instantâneo e outro com ida e volta de rede.
+ *
+ * Nome de cliente e de gestor vêm dentro do projeto desde a integração
+ * (ADR-0007): não é mais preciso cruzar com as listas de cadastro.
  */
 export function filterProjects(
-  projects: readonly Project[],
-  filters: ProjectFilters,
-  lookups: ProjectFilterLookups
-): Project[] {
+  projects: readonly ProjectSummary[],
+  filters: ProjectFilters
+): ProjectSummary[] {
   const search = normalize(filters.search);
-  const clientNameById = new Map(lookups.clients.map((client) => [client.id, client.name]));
-  const userNameById = new Map(lookups.users.map((user) => [user.id, user.name]));
 
   return projects.filter((project) => {
     if (filters.status !== '' && project.status !== filters.status) {
       return false;
     }
-    if (filters.clientId !== '' && project.clientId !== filters.clientId) {
+    if (filters.clientId !== '' && project.client.id !== filters.clientId) {
       return false;
     }
     if (search === '') {
       return true;
     }
-    const haystack = [
-      project.name,
-      clientNameById.get(project.clientId) ?? '',
-      userNameById.get(project.managerId) ?? '',
-    ];
+    const haystack = [project.name, project.client.name, project.manager.name];
     return haystack.some((value) => normalize(value).includes(search));
   });
 }

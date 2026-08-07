@@ -2,8 +2,9 @@
  * Consulta de projetos (RF04) — layout portado de `Projects.tsx` do protótipo.
  *
  * A página só apresenta: os dados vêm de `useProjectsList`, o recorte de
- * `domain/projectFilters` e todo indicador de `domain/indicators`. Nenhum
- * cálculo de "atrasado" ou "% consumido" nasce aqui (armadilha A-005).
+ * `domain/projectFilters` e os indicadores prontos do backend, em
+ * `project.indicators` (ADR-0007). Nenhum cálculo de "atrasado" ou
+ * "% consumido" nasce aqui (armadilha A-005).
  *
  * O destaque de atraso e de estouro atende também ao RF09 nesta tela.
  */
@@ -11,7 +12,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import StatusBadge from '@/components/projects/StatusBadge';
-import { budgetConsumptionPercent, isLate, isOverBudget } from '@/domain/indicators';
 import {
   emptyProjectFilters,
   filterProjects,
@@ -19,8 +19,8 @@ import {
   type ProjectFilters,
 } from '@/domain/projectFilters';
 import { useProjectsList } from '@/hooks/useProjectsList';
-import { EMPTY_VALUE, formatCurrency, formatDate, formatPercent } from '@/lib/format';
-import { projectDetailPath } from '@/routes/paths';
+import { formatCurrency, formatDate, formatPercent } from '@/lib/format';
+import { paths, projectDetailPath } from '@/routes/paths';
 import { isProjectStatus, projectStatuses, projectStatusLabels } from '@/types/project';
 
 const COLUMN_COUNT = 7;
@@ -29,34 +29,31 @@ const inputClass =
   'rounded border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500';
 
 export default function ProjectsPage() {
-  const { projects, clients, users, isLoading, error, reload } = useProjectsList();
+  const { projects, clients, isLoading, error, reload } = useProjectsList();
   const [filters, setFilters] = useState<ProjectFilters>(emptyProjectFilters);
 
-  const filtered = useMemo(
-    () => filterProjects(projects, filters, { clients, users }),
-    [projects, filters, clients, users]
-  );
-
-  const clientNameById = useMemo(
-    () => new Map(clients.map((client) => [client.id, client.name])),
-    [clients]
-  );
-  const managerNameById = useMemo(
-    () => new Map(users.map((user) => [user.id, user.name])),
-    [users]
-  );
+  const filtered = useMemo(() => filterProjects(projects, filters), [projects, filters]);
 
   const filtersActive = hasActiveFilters(filters);
 
   return (
     <div className="flex-1 overflow-auto p-6">
-      <header className="mb-5">
-        <h1 className="text-xl font-semibold text-slate-900">Projetos</h1>
-        <p aria-live="polite" className="mt-0.5 font-mono text-sm text-slate-500">
-          {isLoading || error
-            ? 'Consulta dos projetos cadastrados'
-            : `${filtered.length} de ${projects.length} projetos`}
-        </p>
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Projetos</h1>
+          <p aria-live="polite" className="mt-0.5 font-mono text-sm text-slate-500">
+            {isLoading || error
+              ? 'Consulta dos projetos cadastrados'
+              : `${filtered.length} de ${projects.length} projetos`}
+          </p>
+        </div>
+        {/* Link, não `<button onClick>`: é navegação, e assim abre em nova aba. */}
+        <Link
+          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          to={paths.projectNew}
+        >
+          Novo projeto
+        </Link>
       </header>
 
       <div className="mb-4 flex flex-wrap gap-3">
@@ -198,9 +195,9 @@ export default function ProjectsPage() {
                 </tr>
               ) : (
                 filtered.map((project) => {
-                  const late = isLate(project);
-                  const overBudget = isOverBudget(project);
-                  const percent = budgetConsumptionPercent(project);
+                  // Indicadores vêm calculados pelo backend (ADR-0007).
+                  const { isLate: late, isOverBudget: overBudget } = project.indicators;
+                  const percent = project.indicators.consumptionPercent;
                   // Sem orçamento previsto não há consumo a comparar (RN07).
                   const nearLimit = percent !== null && percent > 80;
 
@@ -227,12 +224,8 @@ export default function ProjectsPage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {clientNameById.get(project.clientId) ?? EMPTY_VALUE}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {managerNameById.get(project.managerId) ?? EMPTY_VALUE}
-                      </td>
+                      <td className="px-4 py-3 text-slate-600">{project.client.name}</td>
+                      <td className="px-4 py-3 text-slate-600">{project.manager.name}</td>
                       <td className="px-4 py-3">
                         <StatusBadge size="sm" status={project.status} />
                       </td>

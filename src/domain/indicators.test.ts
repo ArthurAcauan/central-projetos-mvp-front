@@ -1,113 +1,35 @@
+/**
+ * Testes de `domain/indicators.ts` depois da integração (ADR-0007).
+ *
+ * O que **não** está mais aqui: atraso, percentual de consumo, estouro e
+ * situação de atenção. Passaram a ser calculados pelo backend, e o teste foi
+ * junto com a responsabilidade — mantê-lo aqui verificaria uma regra que este
+ * repositório não implementa mais.
+ *
+ * O que ficou: o que a API não devolve (distância até o prazo, progresso do
+ * período, saldo), as conversões de data — onde mora a armadilha A-002 — e os
+ * agregados que alimentam os gráficos do RF08.
+ */
+
 import { describe, expect, it } from 'vitest';
 import {
   aggregateByClient,
-  budgetConsumptionPercent,
   budgetOverrunPercent,
   budgetRemaining,
   daysUntilDeadline,
-  isLate,
-  isOverBudget,
-  needsAttention,
+  formatCalendarDate,
   parseCalendarDate,
   projectsNeedingAttention,
   scheduleProgressPercent,
   summarizeProjects,
+  topProjectsByHours,
 } from '@/domain/indicators';
-import type { Client } from '@/types/client';
-import type { Project } from '@/types/project';
+import { makeIndicators, makeProjectSummary } from '@/test/factories';
 
-function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
-    id: 'p1',
-    name: 'Portal do Cliente',
-    clientId: 'c1',
-    objective: 'Centralizar o atendimento.',
-    managerId: 'u1',
-    teamId: 't1',
-    startDate: '2026-01-01',
-    deadline: '2026-12-31',
-    budget: 100_000,
-    budgetSpent: 25_000,
-    hoursWorked: 120,
-    status: 'EM_ANDAMENTO',
-    observations: null,
-    createdAt: '2026-01-01T12:00:00.000Z',
-    updatedAt: '2026-01-01T12:00:00.000Z',
-    ...overrides,
-  };
-}
+const TODAY = new Date(2026, 5, 15); // 15/06/2026, meio do ano, fuso local
 
-function makeClient(id: string, name: string): Client {
-  return { id, name, createdAt: '2026-01-01T12:00:00.000Z', updatedAt: '2026-01-01T12:00:00.000Z' };
-}
-
-/**
- * "Hoje" com hora cheia de propósito: a implementação ingênua
- * (`new Date(deadline) < new Date()`) só erra quando o instante atual carrega
- * hora, que é exatamente a armadilha A-002.
- */
-const TODAY = new Date(2026, 7, 6, 14, 30); // 06/08/2026, 14h30 local
-
-describe('budgetConsumptionPercent (RN07, armadilha A-001)', () => {
-  it('calcula o percentual consumido', () => {
-    expect(budgetConsumptionPercent({ budget: 100_000, budgetSpent: 25_000 })).toBe(25);
-  });
-
-  it('devolve null com orçamento zero e nada consumido — nunca NaN', () => {
-    expect(budgetConsumptionPercent({ budget: 0, budgetSpent: 0 })).toBeNull();
-  });
-
-  it('devolve null com orçamento zero e algo consumido — nunca Infinity', () => {
-    expect(budgetConsumptionPercent({ budget: 0, budgetSpent: 5_000 })).toBeNull();
-  });
-
-  it('passa de 100 quando o orçamento estoura, sem travar (RN03)', () => {
-    expect(budgetConsumptionPercent({ budget: 100_000, budgetSpent: 150_000 })).toBe(150);
-  });
-});
-
-describe('isOverBudget', () => {
-  it('é verdadeiro só acima do previsto', () => {
-    expect(isOverBudget({ budget: 100, budgetSpent: 101 })).toBe(true);
-    expect(isOverBudget({ budget: 100, budgetSpent: 100 })).toBe(false);
-    expect(isOverBudget({ budget: 100, budgetSpent: 99 })).toBe(false);
-  });
-
-  it('trata consumo sobre orçamento zero como estouro', () => {
-    expect(isOverBudget({ budget: 0, budgetSpent: 1 })).toBe(true);
-  });
-});
-
-describe('isLate (RN08, armadilha A-002)', () => {
-  it('prazo igual a hoje NÃO está atrasado, mesmo com o dia em andamento', () => {
-    expect(isLate({ deadline: '2026-08-06', status: 'EM_ANDAMENTO' }, TODAY)).toBe(false);
-  });
-
-  it('prazo de ontem está atrasado', () => {
-    expect(isLate({ deadline: '2026-08-05', status: 'EM_ANDAMENTO' }, TODAY)).toBe(true);
-  });
-
-  it('prazo futuro não está atrasado', () => {
-    expect(isLate({ deadline: '2026-08-07', status: 'EM_ANDAMENTO' }, TODAY)).toBe(false);
-  });
-
-  it('projeto encerrado nunca conta como atrasado', () => {
-    expect(isLate({ deadline: '2020-01-01', status: 'CONCLUIDO' }, TODAY)).toBe(false);
-    expect(isLate({ deadline: '2020-01-01', status: 'CANCELADO' }, TODAY)).toBe(false);
-  });
-
-  it('aceita timestamp ISO completo sem deslocar o dia pelo fuso', () => {
-    expect(isLate({ deadline: '2026-08-06T00:00:00.000Z', status: 'EM_RISCO' }, TODAY)).toBe(false);
-  });
-
-  it('degrada para "não atrasado" quando a data é inválida, em vez de quebrar', () => {
-    expect(isLate({ deadline: '', status: 'EM_ANDAMENTO' }, TODAY)).toBe(false);
-    expect(isLate({ deadline: '31/12/2026', status: 'EM_ANDAMENTO' }, TODAY)).toBe(false);
-  });
-});
-
-describe('budgetRemaining', () => {
-  it('devolve o saldo disponível dentro do orçamento', () => {
+describe('saldo do orçamento', () => {
+  it('devolve o que resta do previsto', () => {
     expect(budgetRemaining({ budget: 100_000, budgetSpent: 25_000 })).toBe(75_000);
   });
 
@@ -115,268 +37,322 @@ describe('budgetRemaining', () => {
     expect(budgetRemaining({ budget: 100_000, budgetSpent: 130_000 })).toBe(-30_000);
   });
 
-  it('sem orçamento previsto, o consumido inteiro é excedente', () => {
+  it('não precisa de guarda para orçamento zero: subtração não divide', () => {
     expect(budgetRemaining({ budget: 0, budgetSpent: 5_000 })).toBe(-5_000);
   });
 });
 
-describe('budgetOverrunPercent (RN03, RN07)', () => {
-  it('é zero enquanto o consumo cabe no previsto', () => {
-    expect(budgetOverrunPercent({ budget: 100_000, budgetSpent: 25_000 })).toBe(0);
-    expect(budgetOverrunPercent({ budget: 100_000, budgetSpent: 100_000 })).toBe(0);
+describe('excedente percentual', () => {
+  it('deriva do percentual que a API mandou, sem dividir de novo', () => {
+    const project = makeProjectSummary({ indicators: makeIndicators({ consumptionPercent: 130 }) });
+
+    expect(budgetOverrunPercent(project)).toBe(30);
   });
 
-  it('mede quanto passou do previsto', () => {
-    expect(budgetOverrunPercent({ budget: 100_000, budgetSpent: 130_000 })).toBeCloseTo(30);
+  it('é zero dentro do orçamento', () => {
+    const project = makeProjectSummary({ indicators: makeIndicators({ consumptionPercent: 72 }) });
+
+    expect(budgetOverrunPercent(project)).toBe(0);
   });
 
-  it('devolve null sem orçamento previsto, nunca Infinity', () => {
-    expect(budgetOverrunPercent({ budget: 0, budgetSpent: 5_000 })).toBeNull();
-  });
+  // RN07: sem previsto não há proporção — "—" na tela, nunca 0% (A-001).
+  it('é null quando o consumo é indisponível', () => {
+    const project = makeProjectSummary({
+      indicators: makeIndicators({ consumptionPercent: null }),
+    });
 
-  it('não discorda do percentual de consumo exibido ao lado', () => {
-    const project = { budget: 620_000, budgetSpent: 704_300 };
-    const consumption = budgetConsumptionPercent(project);
-    expect(budgetOverrunPercent(project)).toBeCloseTo((consumption ?? 0) - 100);
-  });
-});
-
-describe('daysUntilDeadline (RF05)', () => {
-  it('conta os dias que faltam', () => {
-    expect(daysUntilDeadline({ deadline: '2026-08-20' }, TODAY)).toBe(14);
-  });
-
-  it('prazo hoje é zero, mesmo com o dia em andamento (armadilha A-002)', () => {
-    expect(daysUntilDeadline({ deadline: '2026-08-06' }, TODAY)).toBe(0);
-  });
-
-  it('prazo vencido devolve negativo', () => {
-    expect(daysUntilDeadline({ deadline: '2026-07-30' }, TODAY)).toBe(-7);
-  });
-
-  it('atravessa a virada do horário de verão sem perder o dia', () => {
-    // No Brasil o horário de verão foi extinto, mas o navegador do usuário pode
-    // estar em outro fuso — a conta é em dias de calendário, não em milissegundos.
-    const beforeDstChange = new Date(2026, 1, 10, 23, 0);
-    expect(daysUntilDeadline({ deadline: '2026-02-25' }, beforeDstChange)).toBe(15);
-  });
-
-  it('devolve null para data inválida', () => {
-    expect(daysUntilDeadline({ deadline: '' }, TODAY)).toBeNull();
-    expect(daysUntilDeadline({ deadline: '20/08/2026' }, TODAY)).toBeNull();
+    expect(budgetOverrunPercent(project)).toBeNull();
   });
 });
 
-describe('scheduleProgressPercent (RF05)', () => {
-  it('mede a fração do período já decorrida', () => {
-    // 01/08 a 11/08 são 10 dias; hoje é 06/08 → metade.
-    expect(
-      scheduleProgressPercent({ startDate: '2026-08-01', deadline: '2026-08-11' }, TODAY)
-    ).toBe(50);
+describe('dias até o prazo', () => {
+  it('conta dias que faltam', () => {
+    expect(daysUntilDeadline({ deadline: '2026-06-25' }, TODAY)).toBe(10);
   });
 
-  it('é zero antes de o projeto começar, nunca negativo', () => {
-    expect(
-      scheduleProgressPercent({ startDate: '2026-09-01', deadline: '2026-12-01' }, TODAY)
-    ).toBe(0);
+  it('devolve zero no dia do prazo', () => {
+    expect(daysUntilDeadline({ deadline: '2026-06-15' }, TODAY)).toBe(0);
   });
 
-  it('trava em 100 com o prazo vencido, para a barra não estourar', () => {
-    expect(
-      scheduleProgressPercent({ startDate: '2026-01-01', deadline: '2026-02-01' }, TODAY)
-    ).toBe(100);
+  it('devolve negativo depois do prazo', () => {
+    expect(daysUntilDeadline({ deadline: '2026-06-05' }, TODAY)).toBe(-10);
   });
 
-  it('devolve null quando início e prazo são o mesmo dia — nunca Infinity', () => {
+  // Armadilha A-002: contar em milissegundos entre instantes atravessa o
+  // horário de verão e erra um dia no arredondamento.
+  it('não erra ao atravessar mudança de horário', () => {
+    const beforeDst = new Date(2026, 1, 10, 23, 30);
+
+    expect(daysUntilDeadline({ deadline: '2026-03-10' }, beforeDst)).toBe(28);
+  });
+
+  it('devolve null para prazo inválido', () => {
+    expect(daysUntilDeadline({ deadline: 'nao-e-data' }, TODAY)).toBeNull();
+  });
+});
+
+describe('progresso do período', () => {
+  it('mede quanto do período já passou', () => {
+    const project = { startDate: '2026-06-05', deadline: '2026-06-25' };
+
+    expect(scheduleProgressPercent(project, TODAY)).toBe(50);
+  });
+
+  it('prende em 100 com o prazo vencido, em vez de passar de 100', () => {
+    const project = { startDate: '2026-01-01', deadline: '2026-02-01' };
+
+    expect(scheduleProgressPercent(project, TODAY)).toBe(100);
+  });
+
+  it('prende em 0 antes de começar', () => {
+    const project = { startDate: '2026-07-01', deadline: '2026-08-01' };
+
+    expect(scheduleProgressPercent(project, TODAY)).toBe(0);
+  });
+
+  // Mesma família da A-001: início igual ao prazo dividiria por zero.
+  it('devolve null quando início e prazo são o mesmo dia', () => {
     expect(
-      scheduleProgressPercent({ startDate: '2026-08-06', deadline: '2026-08-06' }, TODAY)
+      scheduleProgressPercent({ startDate: '2026-06-15', deadline: '2026-06-15' }, TODAY)
     ).toBeNull();
   });
 
-  it('devolve null quando alguma data é inválida', () => {
-    expect(scheduleProgressPercent({ startDate: '', deadline: '2026-12-31' }, TODAY)).toBeNull();
-    expect(scheduleProgressPercent({ startDate: '2026-01-01', deadline: '' }, TODAY)).toBeNull();
+  it('devolve null com data inválida', () => {
+    expect(scheduleProgressPercent({ startDate: 'x', deadline: '2026-12-31' }, TODAY)).toBeNull();
   });
 });
 
-describe('needsAttention (RN09)', () => {
-  const emDia = { deadline: '2026-12-31', budget: 100, budgetSpent: 10 };
-
-  it('vale para status EM_RISCO', () => {
-    expect(needsAttention({ ...emDia, status: 'EM_RISCO' }, TODAY)).toBe(true);
-  });
-
-  it('vale para projeto atrasado', () => {
-    expect(
-      needsAttention({ ...emDia, deadline: '2026-08-05', status: 'EM_ANDAMENTO' }, TODAY)
-    ).toBe(true);
-  });
-
-  it('vale para orçamento excedido', () => {
-    expect(needsAttention({ ...emDia, budgetSpent: 101, status: 'EM_ANDAMENTO' }, TODAY)).toBe(
-      true
-    );
-  });
-
-  it('é falso para projeto em dia', () => {
-    expect(needsAttention({ ...emDia, status: 'EM_ANDAMENTO' }, TODAY)).toBe(false);
-  });
-});
-
-describe('parseCalendarDate', () => {
-  it('devolve meia-noite local, não UTC', () => {
+describe('conversão de data de calendário (armadilha A-002)', () => {
+  it('lê YYYY-MM-DD como data local, não UTC', () => {
     const date = parseCalendarDate('2026-08-06');
+
     expect(date?.getFullYear()).toBe(2026);
     expect(date?.getMonth()).toBe(7);
     expect(date?.getDate()).toBe(6);
-    expect(date?.getHours()).toBe(0);
   });
 
-  it('rejeita data inexistente em vez de normalizar para o mês seguinte', () => {
+  it('aceita timestamp ISO completo lendo só a parte da data', () => {
+    expect(parseCalendarDate('2026-08-06T23:45:00.000Z')?.getDate()).toBe(6);
+  });
+
+  it('devolve null para ausente, vazio ou inválido', () => {
+    expect(parseCalendarDate(null)).toBeNull();
+    expect(parseCalendarDate(undefined)).toBeNull();
+    expect(parseCalendarDate('')).toBeNull();
+    expect(parseCalendarDate('06/08/2026')).toBeNull();
+  });
+
+  it('rejeita data inexistente em vez de normalizar', () => {
     expect(parseCalendarDate('2026-02-31')).toBeNull();
   });
 
-  it('devolve null para valor ausente ou fora do formato', () => {
-    expect(parseCalendarDate('')).toBeNull();
-    expect(parseCalendarDate(null)).toBeNull();
-    expect(parseCalendarDate('06/08/2026')).toBeNull();
+  it('faz o caminho de volta sem converter para UTC', () => {
+    expect(formatCalendarDate(new Date(2026, 7, 6))).toBe('2026-08-06');
+    // 23h local em UTC-3 vira o dia seguinte em UTC; `toISOString` erraria aqui.
+    expect(formatCalendarDate(new Date(2026, 7, 6, 23, 0))).toBe('2026-08-06');
   });
 });
 
-describe('summarizeProjects (RF07)', () => {
-  it('soma valores e conta por status', () => {
-    const summary = summarizeProjects(
-      [
-        makeProject({ id: 'a', budget: 100_000, budgetSpent: 40_000, hoursWorked: 100 }),
-        makeProject({
-          id: 'b',
-          status: 'CONCLUIDO',
-          budget: 60_000,
-          budgetSpent: 60_000,
-          hoursWorked: 50,
-        }),
-      ],
-      TODAY
-    );
+describe('consolidação da carteira (RF07)', () => {
+  const projects = [
+    makeProjectSummary({
+      id: 'p1',
+      status: 'EM_ANDAMENTO',
+      budget: 100_000,
+      budgetSpent: 25_000,
+      hoursWorked: 100,
+    }),
+    makeProjectSummary({
+      id: 'p2',
+      status: 'EM_RISCO',
+      budget: 200_000,
+      budgetSpent: 240_000,
+      hoursWorked: 300,
+      indicators: makeIndicators({
+        consumptionPercent: 120,
+        isOverBudget: true,
+        needsAttention: true,
+        attentionReasons: ['ORCAMENTO_EXCEDIDO'],
+      }),
+    }),
+    makeProjectSummary({
+      id: 'p3',
+      status: 'EM_ANDAMENTO',
+      budget: 50_000,
+      budgetSpent: 47_000,
+      hoursWorked: 60,
+      indicators: makeIndicators({
+        consumptionPercent: 94,
+        isLate: true,
+        hasHighConsumption: true,
+        needsAttention: true,
+        attentionReasons: ['ATRASADO', 'CONSUMO_ELEVADO'],
+      }),
+    }),
+    makeProjectSummary({
+      id: 'p4',
+      status: 'CONCLUIDO',
+      budget: 0,
+      budgetSpent: 0,
+      hoursWorked: 0,
+    }),
+  ];
 
-    expect(summary.totalProjects).toBe(2);
-    expect(summary.totalBudget).toBe(160_000);
-    expect(summary.totalBudgetSpent).toBe(100_000);
-    expect(summary.totalHoursWorked).toBe(150);
-    expect(summary.budgetConsumptionPercent).toBeCloseTo(62.5);
-    expect(summary.projectsByStatus).toEqual({
+  it('soma orçamento, consumo e horas', () => {
+    const summary = summarizeProjects(projects);
+
+    expect(summary.totalProjects).toBe(4);
+    expect(summary.totalBudget).toBe(350_000);
+    expect(summary.totalBudgetSpent).toBe(312_000);
+    expect(summary.totalHoursWorked).toBe(460);
+  });
+
+  it('conta os cinco status, inclusive os zerados', () => {
+    expect(summarizeProjects(projects).projectsByStatus).toEqual({
       PLANEJAMENTO: 0,
-      EM_ANDAMENTO: 1,
-      EM_RISCO: 0,
+      EM_ANDAMENTO: 2,
+      EM_RISCO: 1,
       CONCLUIDO: 1,
       CANCELADO: 0,
     });
   });
 
-  it('conta uma única vez o projeto que atende a várias condições (RN09)', () => {
-    const summary = summarizeProjects(
-      [
-        makeProject({
-          id: 'tudo-junto',
-          status: 'EM_RISCO',
-          deadline: '2026-08-01',
-          budget: 100,
-          budgetSpent: 200,
-        }),
-      ],
-      TODAY
-    );
+  it('lê os contadores dos indicadores da API em vez de recalcular', () => {
+    const summary = summarizeProjects(projects);
 
-    expect(summary.atRiskCount).toBe(1);
     expect(summary.lateCount).toBe(1);
     expect(summary.overBudgetCount).toBe(1);
-    expect(summary.needsAttentionCount).toBe(1);
+    expect(summary.highConsumptionCount).toBe(1);
+    // `EM_RISCO` é julgamento do gestor e continua sendo contado à parte.
+    expect(summary.atRiskCount).toBe(1);
+    // RN09 revisado: p2 e p3. p2 também é EM_RISCO, e mesmo assim conta uma vez.
+    expect(summary.needsAttentionCount).toBe(2);
   });
 
-  it('lida com carteira vazia sem NaN nem divisão por zero', () => {
-    const summary = summarizeProjects([], TODAY);
+  it('calcula o consumo da carteira, e devolve null sem previsto (RN07)', () => {
+    expect(summarizeProjects(projects).budgetConsumptionPercent).toBeCloseTo(89.14, 2);
+    expect(
+      summarizeProjects([makeProjectSummary({ budget: 0, budgetSpent: 0 })])
+        .budgetConsumptionPercent
+    ).toBeNull();
+  });
+
+  // O contrato anexa status fora da lista de propósito, para denunciar dado
+  // corrompido. Descartar em silêncio esconderia o problema.
+  it('separa status não canônico em vez de descartá-lo', () => {
+    const summary = summarizeProjects([
+      ...projects,
+      makeProjectSummary({ id: 'p9', status: 'ARQUIVADO' }),
+    ]);
+
+    expect(summary.totalProjects).toBe(5);
+    expect(summary.unknownStatuses).toEqual([{ status: 'ARQUIVADO', total: 1 }]);
+  });
+
+  it('devolve zeros com a carteira vazia, sem NaN', () => {
+    const summary = summarizeProjects([]);
 
     expect(summary.totalProjects).toBe(0);
-    expect(summary.totalBudget).toBe(0);
     expect(summary.budgetConsumptionPercent).toBeNull();
-    expect(summary.needsAttentionCount).toBe(0);
-    expect(summary.projectsByStatus.PLANEJAMENTO).toBe(0);
-  });
-
-  it('devolve consumo indisponível quando a carteira inteira tem orçamento zero', () => {
-    const summary = summarizeProjects(
-      [
-        makeProject({ budget: 0, budgetSpent: 0 }),
-        makeProject({ id: 'b', budget: 0, budgetSpent: 0 }),
-      ],
-      TODAY
-    );
-
-    expect(summary.budgetConsumptionPercent).toBeNull();
+    expect(summary.unknownStatuses).toEqual([]);
   });
 });
 
-describe('projectsNeedingAttention (RF09)', () => {
-  it('devolve só os projetos que exigem ação, sem repetir', () => {
-    const emRiscoEAtrasado = makeProject({ id: 'a', status: 'EM_RISCO', deadline: '2026-01-01' });
-    const emDia = makeProject({ id: 'b' });
-    const estourado = makeProject({ id: 'c', budget: 10, budgetSpent: 11 });
+describe('painel de atenção (RF09)', () => {
+  it('devolve só quem a API marcou, na ordem de entrada', () => {
+    const calm = makeProjectSummary({ id: 'p1' });
+    const alert = makeProjectSummary({
+      id: 'p2',
+      indicators: makeIndicators({ needsAttention: true, attentionReasons: ['ATRASADO'] }),
+    });
 
-    const result = projectsNeedingAttention([emRiscoEAtrasado, emDia, estourado], TODAY);
-
-    expect(result.map((p) => p.id)).toEqual(['a', 'c']);
+    expect(projectsNeedingAttention([calm, alert, calm]).map((p) => p.id)).toEqual(['p2']);
   });
 });
 
-describe('aggregateByClient (RF07, RF08)', () => {
-  const clients = [
-    makeClient('c1', 'Alfa Log'),
-    makeClient('c2', 'Beta Saúde'),
-    makeClient('c3', 'Sem projetos'),
-  ];
+describe('agregado por cliente (RF08)', () => {
+  const acme = { id: 'cli-01', name: 'Acme' };
+  const beta = { id: 'cli-02', name: 'Beta' };
 
-  it('agrupa e soma por cliente, do maior orçamento para o menor', () => {
-    const result = aggregateByClient(
-      [
-        makeProject({ id: 'a', clientId: 'c1', budget: 50_000, budgetSpent: 10_000 }),
-        makeProject({ id: 'b', clientId: 'c1', budget: 30_000, budgetSpent: 5_000 }),
-        makeProject({ id: 'c', clientId: 'c2', budget: 200_000, budgetSpent: 120_000 }),
-      ],
-      clients
-    );
+  it('soma orçamento e contagem por cliente, usando o nome que veio no projeto', () => {
+    const result = aggregateByClient([
+      makeProjectSummary({ id: 'p1', client: acme, budget: 100_000, budgetSpent: 10_000 }),
+      makeProjectSummary({ id: 'p2', client: acme, budget: 50_000, budgetSpent: 5_000 }),
+      makeProjectSummary({ id: 'p3', client: beta, budget: 400_000, budgetSpent: 90_000 }),
+    ]);
 
     expect(result).toEqual([
       {
-        clientId: 'c2',
-        clientName: 'Beta Saúde',
+        clientId: 'cli-02',
+        clientName: 'Beta',
         projectCount: 1,
-        budget: 200_000,
-        budgetSpent: 120_000,
+        budget: 400_000,
+        budgetSpent: 90_000,
       },
       {
-        clientId: 'c1',
-        clientName: 'Alfa Log',
+        clientId: 'cli-01',
+        clientName: 'Acme',
         projectCount: 2,
-        budget: 80_000,
+        budget: 150_000,
         budgetSpent: 15_000,
       },
     ]);
   });
 
-  it('não cria série para cliente sem projeto (armadilha A-006)', () => {
-    const result = aggregateByClient([makeProject({ clientId: 'c1' })], clients);
-
-    expect(result.map((entry) => entry.clientId)).not.toContain('c3');
+  it('deixa de fora cliente sem projeto — não há o que plotar (A-006)', () => {
+    expect(aggregateByClient([])).toEqual([]);
   });
 
-  it('mantém o orçamento de projeto cujo cliente não veio na lista, com rótulo explícito', () => {
-    const result = aggregateByClient(
-      [makeProject({ clientId: 'fantasma', budget: 10_000 })],
-      clients
+  it('desempata por nome, para a ordem não variar entre cargas', () => {
+    const result = aggregateByClient([
+      makeProjectSummary({ id: 'p1', client: { id: 'z', name: 'Zeta' }, budget: 100 }),
+      makeProjectSummary({ id: 'p2', client: { id: 'a', name: 'Alfa' }, budget: 100 }),
+    ]);
+
+    expect(result.map((entry) => entry.clientName)).toEqual(['Alfa', 'Zeta']);
+  });
+});
+
+describe('horas por projeto (RF08)', () => {
+  it('ordena da maior para a menor carga', () => {
+    const result = topProjectsByHours([
+      makeProjectSummary({ id: 'p1', name: 'Alfa', hoursWorked: 100 }),
+      makeProjectSummary({ id: 'p2', name: 'Beta', hoursWorked: 900 }),
+      makeProjectSummary({ id: 'p3', name: 'Gama', hoursWorked: 400 }),
+    ]);
+
+    expect(result.map((entry) => entry.projectName)).toEqual(['Beta', 'Gama', 'Alfa']);
+    expect(result[0]).toEqual({ projectId: 'p2', projectName: 'Beta', hours: 900 });
+  });
+
+  // Armadilha A-006: barra de altura zero não informa nada e ocupa o eixo.
+  it('deixa de fora projeto sem apontamento', () => {
+    const result = topProjectsByHours([
+      makeProjectSummary({ id: 'p1', name: 'Alfa', hoursWorked: 0 }),
+      makeProjectSummary({ id: 'p2', name: 'Beta', hoursWorked: 10 }),
+    ]);
+
+    expect(result.map((entry) => entry.projectName)).toEqual(['Beta']);
+  });
+
+  it('corta no limite pedido, mantendo os maiores', () => {
+    const projects = [10, 50, 30, 20].map((hours, index) =>
+      makeProjectSummary({ id: `p${index}`, name: `P${index}`, hoursWorked: hours })
     );
 
-    expect(result).toHaveLength(1);
-    expect(result[0].clientName).toBe('Cliente não identificado');
-    expect(result[0].budget).toBe(10_000);
+    expect(topProjectsByHours(projects, 2).map((entry) => entry.hours)).toEqual([50, 30]);
+  });
+
+  it('desempata por nome, para a ordem não variar entre cargas', () => {
+    const result = topProjectsByHours([
+      makeProjectSummary({ id: 'p1', name: 'Zeta', hoursWorked: 100 }),
+      makeProjectSummary({ id: 'p2', name: 'Alfa', hoursWorked: 100 }),
+    ]);
+
+    expect(result.map((entry) => entry.projectName)).toEqual(['Alfa', 'Zeta']);
+  });
+
+  it('devolve lista vazia sem projeto nenhum', () => {
+    expect(topProjectsByHours([])).toEqual([]);
   });
 });

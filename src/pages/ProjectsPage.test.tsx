@@ -2,114 +2,87 @@ import { render as rtlRender, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatCalendarDate } from '@/domain/indicators';
 import ProjectsPage from '@/pages/ProjectsPage';
 import { HttpError } from '@/services/http';
+import { makeClient, makeIndicators, makeProjectSummary } from '@/test/factories';
 import type { Client } from '@/types/client';
-import type { Project } from '@/types/project';
-import type { User } from '@/types/user';
+import type { ProjectSummary } from '@/types/project';
 
 vi.mock('@/services/projects', () => ({ listProjects: vi.fn() }));
 vi.mock('@/services/clients', () => ({ listClients: vi.fn() }));
-vi.mock('@/services/users', () => ({ listUsers: vi.fn() }));
 
 const { listProjects } = await import('@/services/projects');
 const { listClients } = await import('@/services/clients');
-const { listUsers } = await import('@/services/users');
 
-const TIMESTAMP = '2026-01-05T09:00:00.000Z';
+const alfa = { id: 'cli-01', name: 'Alfa Logística' };
+const beta = { id: 'cli-02', name: 'Beta Saúde' };
+const camila = { id: 'usr-01', name: 'Camila Ferreira' };
+const bruno = { id: 'usr-02', name: 'Bruno Tavares' };
 
-function daysFromToday(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return formatCalendarDate(date);
-}
+/** Só para o `<select>` do filtro: o nome exibido vem de dentro do projeto. */
+const clients: Client[] = [makeClient(alfa.id, alfa.name), makeClient(beta.id, beta.name)];
 
-const clients: Client[] = [
-  { id: 'cli-01', name: 'Alfa Logística', createdAt: TIMESTAMP, updatedAt: TIMESTAMP },
-  { id: 'cli-02', name: 'Beta Saúde', createdAt: TIMESTAMP, updatedAt: TIMESTAMP },
-];
-
-const users: User[] = [
-  {
-    id: 'usr-01',
-    name: 'Camila Ferreira',
-    email: 'camila@exemplo.com.br',
-    role: 'COORDENADOR',
-    createdAt: TIMESTAMP,
-  },
-  {
-    id: 'usr-02',
-    name: 'Bruno Tavares',
-    email: 'bruno@exemplo.com.br',
-    role: 'GESTOR_PROJETO',
-    createdAt: TIMESTAMP,
-  },
-];
-
-function makeProject(overrides: Partial<Project> & Pick<Project, 'id' | 'name'>): Project {
-  return {
-    clientId: 'cli-01',
-    objective: 'Objetivo',
-    managerId: 'usr-01',
-    teamId: 'team-01',
-    startDate: daysFromToday(-60),
-    deadline: daysFromToday(30),
-    budget: 100_000,
-    budgetSpent: 25_000,
-    hoursWorked: 100,
-    status: 'EM_ANDAMENTO',
-    observations: null,
-    createdAt: TIMESTAMP,
-    updatedAt: TIMESTAMP,
-    ...overrides,
-  };
+function makeProject(overrides: Partial<ProjectSummary> & Pick<ProjectSummary, 'id' | 'name'>) {
+  return makeProjectSummary({ client: alfa, manager: camila, ...overrides });
 }
 
 /** Em dia, dentro do orçamento. */
 const healthy = makeProject({ id: 'prj-01', name: 'Portal do Cliente' });
 
-/** Prazo vencido com o projeto ativo (RN08). */
+/**
+ * Atrasado. O indicador vem do backend (ADR-0007): o teste declara o estado que
+ * quer exercitar em vez de montar uma data e esperar que a regra o derive.
+ */
 const lateProject = makeProject({
   id: 'prj-02',
   name: 'Rastreamento de Frota',
-  deadline: daysFromToday(-10),
+  deadline: '2026-01-10',
+  indicators: makeIndicators({
+    isLate: true,
+    needsAttention: true,
+    attentionReasons: ['ATRASADO'],
+  }),
 });
 
-/** Prazo hoje: não está atrasado (RN08, armadilha A-002). */
+/** Prazo hoje: a API não marca como atrasado (RN08, armadilha A-002). */
 const dueToday = makeProject({
   id: 'prj-03',
   name: 'Agendamento Online',
-  deadline: daysFromToday(0),
 });
 
 /** Estouro de orçamento (RN03), cliente e gestor diferentes. */
 const overBudget = makeProject({
   id: 'prj-04',
   name: 'Prontuário Eletrônico',
-  clientId: 'cli-02',
-  managerId: 'usr-02',
+  client: beta,
+  manager: bruno,
   status: 'EM_RISCO',
   budget: 200_000,
   budgetSpent: 240_000,
+  indicators: makeIndicators({
+    consumptionPercent: 120,
+    isOverBudget: true,
+    needsAttention: true,
+    attentionReasons: ['ORCAMENTO_EXCEDIDO'],
+  }),
 });
 
 /** Sem orçamento previsto: consumo indisponível (RN07, armadilha A-001). */
 const noBudget = makeProject({
   id: 'prj-05',
   name: 'Painel de Indicadores',
-  clientId: 'cli-02',
+  client: beta,
   status: 'PLANEJAMENTO',
   budget: 0,
   budgetSpent: 0,
+  indicators: makeIndicators({ consumptionPercent: null }),
 });
 
 const allProjects = [healthy, lateProject, dueToday, overBudget, noBudget];
 
-function mockData(projects: Project[]) {
+function mockData(projects: ProjectSummary[]) {
   vi.mocked(listProjects).mockResolvedValue(projects);
   vi.mocked(listClients).mockResolvedValue(clients);
-  vi.mocked(listUsers).mockResolvedValue(users);
 }
 
 /** A tela tem links para os detalhes (F2-2), então precisa de Router. */
@@ -148,6 +121,17 @@ describe('ProjectsPage (RF04)', () => {
     expect(within(rowOf('Portal do Cliente')).getByText('Alfa Logística')).toBeInTheDocument();
     expect(within(rowOf('Portal do Cliente')).getByText('Camila Ferreira')).toBeInTheDocument();
     expect(screen.getByText('5 de 5 projetos')).toBeInTheDocument();
+  });
+
+  it('leva ao cadastro de projeto (F2-3)', async () => {
+    mockData(allProjects);
+    render(<ProjectsPage />);
+    await screen.findByText('Portal do Cliente');
+
+    expect(screen.getByRole('link', { name: 'Novo projeto' })).toHaveAttribute(
+      'href',
+      '/projects/new'
+    );
   });
 
   it('leva aos detalhes pelo nome do projeto (F2-2)', async () => {
@@ -250,7 +234,6 @@ describe('ProjectsPage (RF04)', () => {
       new HttpError('server', 'Erro no servidor. Tente novamente em instantes.', 500)
     );
     vi.mocked(listClients).mockResolvedValue(clients);
-    vi.mocked(listUsers).mockResolvedValue(users);
     render(<ProjectsPage />);
 
     const alert = await screen.findByRole('alert');

@@ -4,7 +4,7 @@ Fatias pequenas, cada uma rastreada até um requisito funcional. Uma fatia = um 
 
 Status: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 
-Atualizado em: 2026-08-06
+Atualizado em: 2026-08-07
 
 Referência visual de todas as telas: [prototype/](../prototype/) (código + prints).
 
@@ -56,26 +56,52 @@ Objetivo: tipos, regras e indicadores testados **antes** de qualquer tela depend
   *Indicadores novos em `domain/indicators.ts`:* `budgetRemaining`, `budgetOverrunPercent`, `daysUntilDeadline`, `scheduleProgressPercent`. O protótipo calcula os três últimos dentro do componente e traz três defeitos junto — data lida em UTC, divisão pelo orçamento zero e divisão por período zero quando início e prazo são o mesmo dia. Aqui cada um tem guarda e teste.
   *Verificado:* 31 testes novos, incluindo prazo igual a hoje, projeto encerrado após o prazo (não é atraso), `budget = 0` sem `NaN`, e período indisponível quando início = prazo.
   *Fora desta fatia, de propósito:* botão "Editar projeto" (F2-4).
-- [ ] **F2-3 — Cadastro de projeto (RF03)** — formulário com validação das regras RN01–RN06. `budget_spent > budget` passa com aviso, não com erro.
-- [ ] **F2-4 — Atualização de projeto (RF06)** — reaproveitar o formulário de F2-3.
+- [x] **F2-3 — Cadastro de projeto (RF03)** — formulário com validação das regras RN01–RN06. `budget_spent > budget` passa com aviso, não com erro.
+  *Entregue:* `src/components/projects/ProjectForm.tsx` (apresentação controlada, layout portado de `ProjectForm.tsx` do protótipo), `src/hooks/useProjectFormData.ts`, `src/hooks/useProjectFormState.ts`, rota `/projects/new` e o botão "Novo projeto" na lista. `toProjectInput` entrou em `domain/projectRules.ts` — devolve `null` exatamente quando `validateProject` acusa erro, então a página não precisa de `!` nem de `as`.
+  *Verificado:* estouro de orçamento avisa e **salva** (RN03/A-003), prazo igual ao início aceito e anterior recusado (RN05), horas negativas recusadas (RN04), `budget = 0` aceito (RN01), observação em branco vira `null`, falha da API preserva o preenchimento, e `/projects/new` resolve como cadastro e não como detalhe de id `"new"`.
+
+- [x] **F2-4 — Atualização de projeto (RF06)** — reaproveitar o formulário de F2-3.
+  *Entregue:* `src/pages/ProjectFormPage.tsx` atende cadastro **e** edição — o modo vem da presença do `:id` na rota (`/projects/:id/edit`). Duas páginas separadas seriam duas cópias das mesmas regras de exibição. Link "Editar projeto" nos detalhes.
+  *Verificado:* 21 testes; o formulário nasce preenchido com o projeto carregado (estado inicial do `useState`, sem `setState` em efeito — L-004), envia só o payload sem id nem timestamps, aplica as mesmas RN01–RN06 do cadastro e limpa a observação apagada para `null`.
 
 ## Fase 3 — Cadastros auxiliares (RF01, RF02)
 
-- [ ] **F3-1 — Clientes (RF02)** — lista + cadastro.
-- [ ] **F3-2 — Equipes** — lista + cadastro.
-- [ ] **F3-3 — Usuários (RF01)** — lista + cadastro com `role` (GERENTE, COORDENADOR, GESTOR_PROJETO). Perfil é dado cadastral, **não** controle de acesso.
+Base comum das três telas: `src/components/registry/RegistryLayout.tsx` (casca: título com contagem, botão, confirmação, estados de carga), `src/components/registry/NameFieldForm.tsx` (cadastro de campo único), `src/hooks/useRegistry.ts` (carga genérica do recurso + projetos, com `addItem` para não recarregar tudo após cadastrar) e `src/domain/registryRules.ts`.
+
+- [x] **F3-1 — Clientes (RF02)** — lista + cadastro.
+  *Verificado:* contagem de projetos por cliente derivada dos projetos carregados (nada persistido), data em pt-BR via `formatTimestamp` (novo em `lib/format.ts` — instante ISO, não data de calendário), nome repetido recusado ignorando caixa e acento, lista vazia distinguida de falha de carga.
+
+- [x] **F3-2 — Equipes** — lista + cadastro.
+  *Verificado:* cards com total/ativos/concluídos por equipe. Projeto `CANCELADO` não entra em ativos nem em concluídos — a soma das colunas pode ser menor que o total, de propósito. Gestão individual de membros continua fora de escopo.
+
+- [x] **F3-3 — Usuários (RF01)** — lista + cadastro com `role` (GERENTE, COORDENADOR, GESTOR_PROJETO). Perfil é dado cadastral, **não** controle de acesso.
+  *Verificado:* e-mail obrigatório, validado no formato e único (`users.email` é `UNIQUE` na modelagem); os três perfis são aceitos igualmente e nenhum libera ou bloqueia nada (A-007). Coluna "Projetos" conta onde a pessoa é gestora responsável.
+  *Decisão estrutural:* nome de cliente e de equipe também são recusados quando repetidos, o que não estava na modelagem. Formalizado em [ADR-0006](decisions/ADR-0006-unicidade-de-nome-nos-cadastros.md), com `UNIQUE` acrescentado a `clients.name` e `teams.name` em `context/04_modelagem_dados_e_banco.md` — **pendência para o backend**, já que a verificação do front é conveniência, não garantia.
 
 ## Fase 4 — Dashboard (RF07, RF08, RF09)
 
-- [ ] **F4-1 — Cards de indicadores (RF07)** — total de projetos, orçamento total, orçamento consumido e %, horas realizadas, em risco, atrasados.
-- [ ] **F4-2 — Gráficos (RF08)** — Recharts: projetos por status (rosca/barras), orçamento previsto vs consumido (barras), projetos por cliente (barras), horas por projeto (barras).
-- [ ] **F4-3 — Painel de atenção (RF09)** — tabela dos projetos em risco/atrasados/com orçamento excedido, com link para os detalhes.
+Entregues juntas em `src/pages/DashboardPage.tsx` + `src/hooks/useDashboard.ts`. Nenhum número nasce na página: `summarizeProjects`, `aggregateByClient`, `projectsNeedingAttention` e `topProjectsByHours` vivem em `domain/indicators.ts`.
+
+- [x] **F4-1 — Cards de indicadores (RF07)** — total de projetos, orçamento total, orçamento consumido e %, horas realizadas, em risco, atrasados.
+  *Verificado:* carteira sem orçamento previsto exibe "—", nunca "0%" nem "∞%" (RN07/A-001); atrasados e orçamento excedido aparecem detalhados, e o card de atenção conta cada projeto uma vez só (RN09).
+
+- [x] **F4-2 — Gráficos (RF08)** — Recharts: projetos por status (rosca/barras), orçamento previsto vs consumido (barras), projetos por cliente (barras), horas por projeto (barras).
+  *Verificado:* cada série vazia vira uma frase no lugar do gráfico (A-006); status sem projeto não vira fatia; projeto sem apontamento não vira barra de altura zero. Cores de status idênticas às do `StatusBadge`. Os SVG vão como `aria-hidden` e os mesmos números estão em texto (cards, lista `sr-only` de status, tabela do RF09).
+
+- [x] **F4-3 — Painel de atenção (RF09)** — tabela dos projetos em risco/atrasados/com orçamento excedido, com link para os detalhes.
+  *Verificado:* prazo igual a hoje **não** entra (A-002) e projeto encerrado após o prazo também não (RN08); o motivo aparece em texto ("Em risco · Orç. excedido"), não só em cor.
 
 ## Fase 5 — Integração e fechamento
 
-- [ ] **F5-1 — Integração com a API real** — trocar mock por backend; validar casing do contrato na prática.
+- [x] **F5-1 — Integração com a API real** — trocar mock por backend; validar casing do contrato na prática.
+  *O contrato real ([context/CONTRATO_API.md](../context/CONTRATO_API.md)) divergiu do que o ADR-0002 assumiu, em responsabilidade e não em casing:* relações chegam resolvidas (`client: {id,name}`), indicadores vêm calculados pela API, o projeto tem duas formas (lista e detalhe), `status` chega como `string`, o erro é `{ erro, detalhes }` e a porta é 3333.
+  *Decidido em [ADR-0007](decisions/ADR-0007-indicadores-vem-do-backend.md):* o backend passa a ser a fonte dos indicadores — `domain/indicators.ts` fica com o que a API não manda; **RN09 redefinido** (ganha consumo ≥ 90%, perde o `EM_RISCO` declarado, que vira indicador próprio); o dashboard sai todo de `GET /projects`, porque `GET /dashboard` não traz orçamento por cliente nem horas por projeto.
+  *Decidido em [ADR-0008](decisions/ADR-0008-mock-vira-fixture-de-resposta-real.md):* o mock passa a servir respostas capturadas da API e a devolver DTO, atravessando os mesmos mapeadores da resposta real — não pode divergir do contrato sem quebrar o build. `VITE_USE_MOCK` agora é `false` por padrão.
+  *Verificado com a API no ar:* os **nove agregados** que o front deriva de `GET /projects` batem número a número com `GET /dashboard`, incluindo a contagem dos cinco status. No caminho de escrita, o payload que o front monta é aceito no `PUT` (200) enquanto o objeto cru do `GET` é recusado (400), estouro de orçamento passa (201, RN03), prazo invertido é recusado (400, RN05), reabrir projeto `CONCLUIDO` é recusado (400) e nome de cliente repetido com caixa diferente responde 409 — confirmando o [ADR-0006](decisions/ADR-0006-unicidade-de-nome-nos-cadastros.md) do lado do banco.
+  *Novo no front:* limites de tamanho e casas decimais em `projectRules.ts`, transição de status bloqueada em projeto encerrado, retry automático em `503` **só para `GET`** (cold start do Neon), e `src/test/factories.ts` para os testes declararem o indicador que exercitam.
 - [ ] **F5-2 — Usabilidade e robustez (RNF01, RNF02)** — revisão de estados vazios/erro, responsividade, formatação de moeda/data pt-BR, acessibilidade básica.
-  *Pendência conhecida:* desde F2-2 o bundle passou de 500 kB (534 kB, 164 kB gzip) por causa do Recharts, e o Vite avisa. Não tratado antes porque o dashboard (F4-2) usa Recharts de qualquer forma; a saída é code-splitting por rota, avaliado aqui.
+  *Pendência conhecida:* desde F2-2 o bundle passa de 500 kB por causa do Recharts, e o Vite avisa. Hoje está em **715 kB (208 kB gzip)**. A saída é code-splitting por rota (`React.lazy` nas rotas de dashboard e detalhes), avaliado aqui.
+  *Pendência de configuração, não de código:* a porta do front precisa estar em `CORS_ORIGIN` no `.env` do **backend**. Hoje ele autoriza 5173 e 3000; se a 5173 estiver ocupada, o Vite cai na 5174 e o navegador barra tudo com erro de CORS — verificado.
 - [ ] **F5-3 — Fechamento acadêmico** — README com instruções, dados de demonstração, roteiro para a validação com profissionais de gestão.
 
 ---

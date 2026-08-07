@@ -6,7 +6,7 @@ Comunicação: responda sempre em **português (pt-BR)**. Código, nomes de arqu
 
 ## Estado do repositório
 
-Este é o **frontend** de um MVP acadêmico de dois repositórios (Projeto Final II — "Plataforma de Centralização e Análise de Informações para Gestão de Projetos"). Concluídas as fases 0 (fundação) e 1 (domínio, serviços e mock): o front roda sem backend. Em andamento a fase 2 (telas de projeto) — estado corrente sempre em [docs/BACKLOG.md](docs/BACKLOG.md).
+Este é o **frontend** de um MVP acadêmico de dois repositórios (Projeto Final II — "Plataforma de Centralização e Análise de Informações para Gestão de Projetos"). Concluídas as fases 0 a 4 e a **integração com a API real** (F5-1): RF01–RF09 cobertos, rodando contra o backend em `http://localhost:3333`. Faltam F5-2 (usabilidade e code-splitting) e F5-3 (fechamento acadêmico) — estado corrente sempre em [docs/BACKLOG.md](docs/BACKLOG.md).
 
 ## Comandos
 
@@ -48,6 +48,7 @@ Requisitos, arquitetura e modelo de dados estão em [context/](context/). Esses 
 3. [02_arquitetura_final_projeto.md](context/02_arquitetura_final_projeto.md) — arquitetura, stack, gráficos previstos
 4. [03_contexto_completo_projeto.md](context/03_contexto_completo_projeto.md) — contexto completo
 5. [04_modelagem_dados_e_banco.md](context/04_modelagem_dados_e_banco.md) — modelo de dados e DER textual
+6. [CONTRATO_API.md](context/CONTRATO_API.md) — **contrato real da API**, extraído do backend pronto. Endpoints, formatos, erros e armadilhas. É a fonte da verdade do que a API devolve; onde ele contradisser os outros documentos, ele vence.
 
 Os `.docx`/`.pdf` ao lado são as fontes originais para rastreabilidade acadêmica — **imutáveis** (há hook bloqueando). Edite o `.md` equivalente. Decisão estrutural precisa voltar para estes documentos.
 
@@ -85,7 +86,7 @@ Responsabilidade por camada — nenhuma página chama HTTP diretamente:
 - `routes/` — definição de rotas
 - `lib/` — utilitários de apresentação sem regra de negócio; hoje só `format.ts` (moeda, data e percentual pt-BR). Formatar não é decidir: `domain/` decide, `lib/` só formata o que já foi decidido ([ADR-0005](docs/decisions/ADR-0005-camada-lib-de-formatacao.md))
 
-Indicadores derivados **nunca são persistidos** — são calculados a partir dos campos do projeto. O cálculo vive **só** em `src/domain/indicators.ts`, para que dashboard, lista e detalhes nunca discordem. Duplicar cálculo é motivo de rejeição no Definition of Done.
+Indicadores derivados **nunca são persistidos**. Desde a integração ([ADR-0007](docs/decisions/ADR-0007-indicadores-vem-do-backend.md)) quem os calcula é o **backend**, e o front lê `project.indicators` — recalcular na tela é motivo de rejeição no Definition of Done. O que a API não manda continua vivendo **só** em `src/domain/indicators.ts`, pelo mesmo motivo de antes: para dashboard, lista e detalhes nunca discordarem.
 
 ## Modelo de domínio
 
@@ -98,7 +99,9 @@ Enumerações são strings simples — use exatamente estes literais:
 - `status`: `PLANEJAMENTO`, `EM_ANDAMENTO`, `EM_RISCO`, `CONCLUIDO`, `CANCELADO`
 - `role` (users): `GERENTE`, `COORDENADOR`, `GESTOR_PROJETO`
 
-**Casing do contrato** ([ADR-0002](docs/decisions/ADR-0002-contrato-de-dados-e-mapeamento.md)): a documentação é ambígua (`budget_spent` na modelagem, `budgetSpent` nos requisitos) e o formato real da API ainda não foi confirmado. Decisão vigente: o tipo de domínio no front é **camelCase**, e a tradução acontece em **um único mapeador por recurso** dentro de `services/`. Nenhum `snake_case` fora de `services/`.
+**Casing do contrato** ([ADR-0002](docs/decisions/ADR-0002-contrato-de-dados-e-mapeamento.md)): a API usa `snake_case`, confirmado em `context/CONTRATO_API.md`. O tipo de domínio no front é **camelCase**, e a tradução acontece em **um único mapeador por recurso** dentro de `services/`. Nenhum `snake_case` fora de `services/`.
+
+**Forma do projeto na API**: as relações chegam **resolvidas** (`client: {id, name}`, `manager`, `team`), não como FK solta, e vêm em duas formas — `ProjectSummary` na lista, `Project` no detalhe. O payload de escrita volta a usar id solto: **o objeto do `GET` não é aceito pelo `PUT`**, chave a mais responde 400.
 
 ## Regras de negócio que afetam validação
 
@@ -107,15 +110,27 @@ Enumerações são strings simples — use exatamente estes literais:
 - `budget_spent` **pode exceder** `budget` — não bloqueie (RN03). Estouro é sinal a ser evidenciado no dashboard, exibido como aviso, nunca como erro que impede salvar.
 - Projeto exige cliente, gestor, equipe, objetivo, **data de início**, prazo, orçamento e status (RN06)
 - Cadastro inclui data de início e orçamento consumido (RF03)
+- `users.email` é único (modelagem). `clients.name` e `teams.name` também — o nome é o que distingue esses cadastros no gráfico do RF08 e no seletor de projeto ([ADR-0006](docs/decisions/ADR-0006-unicidade-de-nome-nos-cadastros.md)). A comparação no front ignora caixa e acento e é conveniência, não garantia: a restrição real é do banco.
 
 ## Indicadores derivados
 
-- Consumo do orçamento = `budget_spent / budget * 100` — **`budget = 0` deve retornar `null`**, não `Infinity`/`NaN` (RN07, armadilha A-001)
-- Projeto atrasado = hoje > `deadline` **e** status não em (`CONCLUIDO`, `CANCELADO`) — comparar **datas de calendário no fuso local**, não UTC; prazo igual a hoje **não** está atrasado (RN08, armadilha A-002)
-- Orçamento excedido = `budget_spent > budget`
-- Em situação de atenção = status `EM_RISCO` **ou** atrasado **ou** orçamento excedido, cada projeto contado uma única vez (RN09)
+**Quem calcula o quê** ([ADR-0007](docs/decisions/ADR-0007-indicadores-vem-do-backend.md)):
 
-Agregados do dashboard: total de projetos, por status, por cliente, orçamento total vs consumido, horas realizadas, em risco e atrasados.
+O **backend** calcula e devolve em `project.indicators` de toda resposta de projeto — o front apresenta e **nunca recalcula**, porque duas implementações divergiriam e a tela mostraria número diferente do que a API afirma:
+
+- `consumptionPercent` — **`null` quando `budget = 0`**, não `Infinity`/`NaN` (RN07, armadilha A-001)
+- `isLate` — prazo vencido com o projeto ativo; prazo igual a hoje **não** atrasa (RN08, armadilha A-002)
+- `isOverBudget` — `budgetSpent > budget`
+- `hasHighConsumption` — consumo ≥ 90%, aviso antes do estouro
+- `needsAttention` + `attentionReasons` — atrasado **ou** estourado **ou** consumo elevado, excluindo encerrados, cada projeto uma vez (RN09 revisado)
+
+O status `EM_RISCO` é julgamento manual do gestor e **não** entra em `needsAttention`: é indicador próprio. **Nunca some os dois** — um projeto pode estar nos dois, e a soma passaria do total da carteira.
+
+`src/domain/indicators.ts` cobre o que a API **não** manda, e continua sendo fonte única disso: `budgetRemaining`, `daysUntilDeadline`, `scheduleProgressPercent`, `budgetOverrunPercent` e os agregados `summarizeProjects`, `aggregateByClient`, `topProjectsByHours`.
+
+O dashboard sai todo de `GET /projects`. `GET /dashboard` e `GET /projects/attention` existem mas não são usados: não trazem orçamento por cliente nem horas por projeto, que dois gráficos do RF08 precisam, e misturar fontes colocaria dois números discordantes na mesma tela.
+
+`status` chega da API como `string`, não como união fechada — ela devolve valor fora dos cinco canônicos de propósito, para denunciar dado corrompido. Mapas de cor e rótulo precisam de valor padrão.
 
 ## Telas no escopo
 

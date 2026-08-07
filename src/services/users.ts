@@ -12,7 +12,7 @@ import type { User, UserInput, UserRole } from '@/types/user';
 
 const RESOURCE_PATH = '/users';
 
-interface UserDto {
+export interface UserDto {
   id: string;
   name: string;
   email: string;
@@ -22,14 +22,14 @@ interface UserDto {
 
 export function listUsers(options?: RequestOptions): Promise<User[]> {
   if (isMockEnabled()) {
-    return mockListUsers();
+    return mockListUsers().then((dtos) => dtos.map(toUser));
   }
   return httpGet<UserDto[]>(RESOURCE_PATH, options).then((dtos) => dtos.map(toUser));
 }
 
 export function createUser(input: UserInput, options?: RequestOptions): Promise<User> {
   if (isMockEnabled()) {
-    return mockCreateUser(input);
+    return mockCreateUser(input).then(toUser);
   }
   return httpPost<UserDto>(
     RESOURCE_PATH,

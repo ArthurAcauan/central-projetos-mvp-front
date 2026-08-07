@@ -5,152 +5,112 @@ import {
   hasActiveFilters,
   type ProjectFilters,
 } from '@/domain/projectFilters';
-import type { Client } from '@/types/client';
-import type { Project } from '@/types/project';
-import type { User } from '@/types/user';
+import { makeProjectSummary } from '@/test/factories';
 
-const TIMESTAMP = '2026-01-05T09:00:00.000Z';
+const alfa = { id: 'cli-01', name: 'Alfa Logística' };
+const beta = { id: 'cli-02', name: 'Beta Saúde' };
+const camila = { id: 'usr-01', name: 'Camila Ferreira' };
+const bruno = { id: 'usr-02', name: 'Bruno Tavares' };
 
-const clients: Client[] = [
-  { id: 'cli-01', name: 'Alfa Logística', createdAt: TIMESTAMP, updatedAt: TIMESTAMP },
-  { id: 'cli-02', name: 'Beta Saúde', createdAt: TIMESTAMP, updatedAt: TIMESTAMP },
-];
+const portal = makeProjectSummary({
+  id: 'prj-01',
+  name: 'Portal do Cliente',
+  client: alfa,
+  manager: camila,
+});
+const frota = makeProjectSummary({
+  id: 'prj-02',
+  name: 'Rastreamento de Frota',
+  client: alfa,
+  manager: bruno,
+  status: 'EM_RISCO',
+});
+const prontuario = makeProjectSummary({
+  id: 'prj-03',
+  name: 'Prontuário Eletrônico',
+  client: beta,
+  manager: bruno,
+  status: 'EM_RISCO',
+});
+const agendamento = makeProjectSummary({
+  id: 'prj-04',
+  name: 'Agendamento Online',
+  client: beta,
+  manager: camila,
+  status: 'CONCLUIDO',
+});
 
-const users: User[] = [
-  {
-    id: 'usr-01',
-    name: 'Camila Ferreira',
-    email: 'camila@exemplo.com.br',
-    role: 'COORDENADOR',
-    createdAt: TIMESTAMP,
-  },
-  {
-    id: 'usr-02',
-    name: 'Bruno Tavares',
-    email: 'bruno@exemplo.com.br',
-    role: 'GESTOR_PROJETO',
-    createdAt: TIMESTAMP,
-  },
-];
+const projects = [portal, frota, prontuario, agendamento];
 
-function makeProject(overrides: Partial<Project> & Pick<Project, 'id' | 'name'>): Project {
-  return {
-    clientId: 'cli-01',
-    objective: 'Objetivo',
-    managerId: 'usr-01',
-    teamId: 'team-01',
-    startDate: '2026-01-10',
-    deadline: '2026-12-31',
-    budget: 100_000,
-    budgetSpent: 10_000,
-    hoursWorked: 100,
-    status: 'EM_ANDAMENTO',
-    observations: null,
-    createdAt: TIMESTAMP,
-    updatedAt: TIMESTAMP,
-    ...overrides,
-  };
+function apply(filters: Partial<ProjectFilters>): string[] {
+  return filterProjects(projects, { ...emptyProjectFilters, ...filters }).map(
+    (project) => project.id
+  );
 }
 
-const projects: Project[] = [
-  makeProject({ id: 'prj-01', name: 'Portal do Cliente', clientId: 'cli-01', managerId: 'usr-01' }),
-  makeProject({
-    id: 'prj-02',
-    name: 'Prontuário Eletrônico',
-    clientId: 'cli-02',
-    managerId: 'usr-02',
-    status: 'EM_RISCO',
-  }),
-  makeProject({
-    id: 'prj-03',
-    name: 'Catálogo Digital',
-    clientId: 'cli-02',
-    managerId: 'usr-01',
-    status: 'PLANEJAMENTO',
-  }),
-];
-
-const lookups = { clients, users };
-
-function filtersWith(overrides: Partial<ProjectFilters>): ProjectFilters {
-  return { ...emptyProjectFilters, ...overrides };
-}
-
-function namesOf(result: Project[]): string[] {
-  return result.map((project) => project.name);
-}
-
-describe('filterProjects', () => {
-  it('sem filtro devolve tudo na ordem de entrada', () => {
-    expect(namesOf(filterProjects(projects, emptyProjectFilters, lookups))).toEqual([
-      'Portal do Cliente',
-      'Prontuário Eletrônico',
-      'Catálogo Digital',
-    ]);
+describe('filtros ativos', () => {
+  it('reconhece o estado sem filtro', () => {
+    expect(hasActiveFilters(emptyProjectFilters)).toBe(false);
+    expect(hasActiveFilters({ ...emptyProjectFilters, search: '   ' })).toBe(false);
   });
 
-  it('filtra por status', () => {
-    const result = filterProjects(projects, filtersWith({ status: 'EM_RISCO' }), lookups);
-    expect(namesOf(result)).toEqual(['Prontuário Eletrônico']);
-  });
-
-  it('filtra por cliente', () => {
-    const result = filterProjects(projects, filtersWith({ clientId: 'cli-02' }), lookups);
-    expect(namesOf(result)).toEqual(['Prontuário Eletrônico', 'Catálogo Digital']);
-  });
-
-  it('busca pelo nome do projeto ignorando caixa e acento', () => {
-    const result = filterProjects(projects, filtersWith({ search: 'CATALOGO' }), lookups);
-    expect(namesOf(result)).toEqual(['Catálogo Digital']);
-  });
-
-  it('busca pelo nome do cliente', () => {
-    const result = filterProjects(projects, filtersWith({ search: 'logistica' }), lookups);
-    expect(namesOf(result)).toEqual(['Portal do Cliente']);
-  });
-
-  it('busca pelo nome do gestor', () => {
-    const result = filterProjects(projects, filtersWith({ search: 'bruno' }), lookups);
-    expect(namesOf(result)).toEqual(['Prontuário Eletrônico']);
-  });
-
-  it('combina os filtros com E lógico', () => {
-    const result = filterProjects(
-      projects,
-      filtersWith({ clientId: 'cli-02', status: 'PLANEJAMENTO' }),
-      lookups
-    );
-    expect(namesOf(result)).toEqual(['Catálogo Digital']);
-  });
-
-  it('devolve vazio quando nada casa', () => {
-    expect(filterProjects(projects, filtersWith({ search: 'inexistente' }), lookups)).toEqual([]);
-  });
-
-  it('ignora espaços em volta do termo buscado', () => {
-    const result = filterProjects(projects, filtersWith({ search: '  portal  ' }), lookups);
-    expect(namesOf(result)).toEqual(['Portal do Cliente']);
-  });
-
-  it('não quebra quando o cliente ou o gestor do projeto não está na lista', () => {
-    const orphan = makeProject({ id: 'prj-04', name: 'Órfão', clientId: 'cli-99' });
-    const result = filterProjects([orphan], filtersWith({ search: 'orfao' }), lookups);
-    expect(namesOf(result)).toEqual(['Órfão']);
+  it('reconhece cada filtro isolado', () => {
+    expect(hasActiveFilters({ ...emptyProjectFilters, search: 'portal' })).toBe(true);
+    expect(hasActiveFilters({ ...emptyProjectFilters, status: 'EM_RISCO' })).toBe(true);
+    expect(hasActiveFilters({ ...emptyProjectFilters, clientId: 'cli-01' })).toBe(true);
   });
 });
 
-describe('hasActiveFilters', () => {
-  it('é falso sem filtro aplicado', () => {
-    expect(hasActiveFilters(emptyProjectFilters)).toBe(false);
+describe('recorte da consulta (RF04)', () => {
+  it('sem filtro devolve tudo, na ordem de entrada', () => {
+    expect(apply({})).toEqual(['prj-01', 'prj-02', 'prj-03', 'prj-04']);
   });
 
-  it('é falso quando a busca tem só espaços', () => {
-    expect(hasActiveFilters(filtersWith({ search: '   ' }))).toBe(false);
+  it('filtra por status', () => {
+    expect(apply({ status: 'EM_RISCO' })).toEqual(['prj-02', 'prj-03']);
   });
 
-  it('é verdadeiro com qualquer filtro preenchido', () => {
-    expect(hasActiveFilters(filtersWith({ search: 'a' }))).toBe(true);
-    expect(hasActiveFilters(filtersWith({ status: 'CONCLUIDO' }))).toBe(true);
-    expect(hasActiveFilters(filtersWith({ clientId: 'cli-01' }))).toBe(true);
+  it('filtra por cliente', () => {
+    expect(apply({ clientId: 'cli-02' })).toEqual(['prj-03', 'prj-04']);
+  });
+
+  it('combina os filtros com E lógico', () => {
+    expect(apply({ status: 'EM_RISCO', clientId: 'cli-02' })).toEqual(['prj-03']);
+  });
+
+  it('devolve vazio quando a combinação não casa com nada', () => {
+    expect(apply({ status: 'CANCELADO', clientId: 'cli-01' })).toEqual([]);
+  });
+});
+
+describe('busca textual', () => {
+  it('acha pelo nome do projeto', () => {
+    expect(apply({ search: 'portal' })).toEqual(['prj-01']);
+  });
+
+  // Nome de cliente e gestor vêm dentro do projeto desde a integração.
+  it('acha pelo nome do cliente', () => {
+    expect(apply({ search: 'beta' })).toEqual(['prj-03', 'prj-04']);
+  });
+
+  it('acha pelo nome do gestor', () => {
+    expect(apply({ search: 'bruno' })).toEqual(['prj-02', 'prj-03']);
+  });
+
+  it('ignora caixa e acento — "logistica" precisa achar "Alfa Logística"', () => {
+    expect(apply({ search: 'LOGISTICA' })).toEqual(['prj-01', 'prj-02']);
+    expect(apply({ search: 'prontuario' })).toEqual(['prj-03']);
+  });
+
+  it('ignora espaço nas pontas', () => {
+    expect(apply({ search: '  portal  ' })).toEqual(['prj-01']);
+  });
+
+  it('combina com os demais filtros', () => {
+    expect(apply({ search: 'bruno', status: 'EM_RISCO', clientId: 'cli-01' })).toEqual(['prj-02']);
+  });
+
+  it('devolve vazio quando não acha', () => {
+    expect(apply({ search: 'inexistente' })).toEqual([]);
   });
 });

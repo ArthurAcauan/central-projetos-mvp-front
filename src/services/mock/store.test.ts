@@ -1,5 +1,14 @@
+/**
+ * A fixture serve para demonstrar o front sem a API (ADR-0008). Estes testes
+ * garantem o que a demonstração precisa: que ela é o formato do contrato, que
+ * cobre os casos visuais que costumam quebrar a tela, e que os cenários `vazio`
+ * e `erro` continuam exercitáveis.
+ *
+ * O que **não** é verificado aqui é a regra dos indicadores: eles vêm gravados
+ * da API, e conferir o valor seria testar o backend a partir do front.
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { budgetConsumptionPercent, isLate, isOverBudget } from '@/domain/indicators';
 import { isHttpError } from '@/services/http';
 import {
   mockCreateProject,
@@ -11,16 +20,15 @@ import {
   mockUpdateProject,
   resetMockStore,
 } from '@/services/mock/store';
-import { projectStatuses } from '@/types/project';
-import type { ProjectInput } from '@/types/project';
+import { projectStatuses, type ProjectInput } from '@/types/project';
 
-function newProjectInput(): ProjectInput {
+function newProjectInput(overrides: Partial<ProjectInput> = {}): ProjectInput {
   return {
     name: 'Projeto de Teste',
-    clientId: 'cli-01',
+    clientId: 'd38b1bc3-6788-4809-be42-4c6f251427af',
     objective: 'Objetivo do projeto de teste.',
-    managerId: 'usr-01',
-    teamId: 'team-01',
+    managerId: 'd3cc9562-984a-4174-a20b-1f3af7c2324c',
+    teamId: 'b5812071-213f-482f-9be5-87e737afeabe',
     startDate: '2026-04-01',
     deadline: '2026-10-01',
     budget: 50_000,
@@ -28,159 +36,166 @@ function newProjectInput(): ProjectInput {
     hoursWorked: 0,
     status: 'PLANEJAMENTO',
     observations: null,
+    ...overrides,
   };
 }
 
 beforeEach(() => {
   resetMockStore();
+  vi.stubEnv('VITE_MOCK_SCENARIO', 'padrao');
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/**
- * O seed é ativo de teste (ADR-0001): precisa exercitar as bordas que o
- * dashboard tem de mostrar corretamente, ou os defeitos só aparecem na
- * demonstração.
- */
-describe('cobertura do seed', () => {
-  it('traz ao menos 15 projetos', async () => {
-    expect((await mockListProjects()).length).toBeGreaterThanOrEqual(15);
+describe('formato da fixture', () => {
+  it('devolve o DTO da API, com relações resolvidas e indicadores', async () => {
+    const [project] = await mockListProjects();
+
+    expect(project).toMatchObject({
+      client: { id: expect.any(String), name: expect.any(String) },
+      manager: { id: expect.any(String), name: expect.any(String) },
+      team: { id: expect.any(String), name: expect.any(String) },
+      indicadores: {
+        projeto_atrasado: expect.any(Boolean),
+        em_atencao: expect.any(Boolean),
+      },
+    });
   });
 
-  it('ocupa os cinco status', async () => {
+  // A lista da API não devolve estes campos; a fixture não pode devolver.
+  it('a lista não traz objetivo, observação nem timestamps', async () => {
+    const [project] = await mockListProjects();
+
+    expect(project).not.toHaveProperty('objective');
+    expect(project).not.toHaveProperty('observations');
+    expect(project).not.toHaveProperty('created_at');
+  });
+
+  it('o detalhe traz os campos que só ele tem', async () => {
+    const [summary] = await mockListProjects();
+    const detail = await mockGetProject(summary.id);
+
+    expect(detail.objective).toEqual(expect.any(String));
+    expect(detail.created_at).toEqual(expect.any(String));
+  });
+});
+
+describe('cobertura dos casos visuais', () => {
+  it('ocupa todos os cinco status', async () => {
     const projects = await mockListProjects();
-    const usados = new Set(projects.map((project) => project.status));
+    const present = new Set(projects.map((project) => project.status));
 
     for (const status of projectStatuses) {
-      expect(usados).toContain(status);
+      expect(present).toContain(status);
     }
   });
 
-  it('inclui projeto atrasado', async () => {
+  it('tem projeto atrasado, estourado, com consumo elevado e sem orçamento', async () => {
     const projects = await mockListProjects();
 
-    expect(projects.some((project) => isLate(project))).toBe(true);
+    expect(projects.some((p) => p.indicadores.projeto_atrasado)).toBe(true);
+    expect(projects.some((p) => p.indicadores.orcamento_excedido)).toBe(true);
+    expect(projects.some((p) => p.indicadores.consumo_elevado)).toBe(true);
+    // `budget = 0`: percentual indisponível (RN07, armadilha A-001).
+    expect(projects.some((p) => p.indicadores.consumo_orcamento_percentual === null)).toBe(true);
   });
 
-  it('inclui projeto com prazo hoje, que não pode contar como atrasado (RN08)', async () => {
+  // RN08: projeto encerrado não é atraso, por vencido que esteja.
+  it('tem projeto encerrado que não aparece como atrasado nem em atenção', async () => {
     const projects = await mockListProjects();
-    const hoje = new Date();
-    const prazoHoje = projects.filter(
-      (project) =>
-        project.deadline ===
-        `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(
-          hoje.getDate()
-        ).padStart(2, '0')}`
+    const closed = projects.filter((p) => p.status === 'CONCLUIDO' || p.status === 'CANCELADO');
+
+    expect(closed.length).toBeGreaterThan(0);
+    for (const project of closed) {
+      expect(project.indicadores.projeto_atrasado).toBe(false);
+      expect(project.indicadores.em_atencao).toBe(false);
+    }
+  });
+
+  it('tem clientes, equipes e usuários para os seletores do formulário', async () => {
+    expect((await mockListClients()).length).toBeGreaterThan(0);
+    expect((await mockListTeams()).length).toBeGreaterThan(0);
+    expect((await mockListUsers()).length).toBeGreaterThan(0);
+  });
+});
+
+describe('filtro da lista', () => {
+  it('recorta por status', async () => {
+    const filtered = await mockListProjects({ status: 'EM_RISCO' });
+
+    expect(filtered.length).toBeGreaterThan(0);
+    expect(filtered.every((project) => project.status === 'EM_RISCO')).toBe(true);
+  });
+
+  it('recorta por cliente', async () => {
+    const [first] = await mockListProjects();
+    const filtered = await mockListProjects({ clientId: first.client.id });
+
+    expect(filtered.every((project) => project.client.id === first.client.id)).toBe(true);
+  });
+});
+
+describe('escrita', () => {
+  it('cadastra resolvendo as relações pelo id', async () => {
+    const created = await mockCreateProject(newProjectInput());
+
+    expect(created.id).toMatch(/^prj-fixture-/);
+    expect(created.client.name).toBe('Acme Industria');
+    expect(created.manager.name).toBe('Ana Souza');
+    expect((await mockListProjects()).some((p) => p.id === created.id)).toBe(true);
+  });
+
+  // RN03: o estouro passa, e vira indicador — não erro.
+  it('aceita orçamento consumido acima do previsto e marca o estouro', async () => {
+    const created = await mockCreateProject(newProjectInput({ budget: 100, budgetSpent: 500 }));
+
+    expect(created.indicadores.orcamento_excedido).toBe(true);
+    expect(created.indicadores.motivos_de_atencao).toContain('ORCAMENTO_EXCEDIDO');
+  });
+
+  // RN07: sem previsto não há proporção.
+  it('deixa o percentual nulo quando o orçamento é zero', async () => {
+    const created = await mockCreateProject(newProjectInput({ budget: 0, budgetSpent: 0 }));
+
+    expect(created.indicadores.consumo_orcamento_percentual).toBeNull();
+  });
+
+  it('atualiza preservando o id e a data de criação', async () => {
+    const [first] = await mockListProjects();
+    const before = await mockGetProject(first.id);
+
+    const updated = await mockUpdateProject(first.id, newProjectInput({ name: 'Renomeado' }));
+
+    expect(updated.id).toBe(first.id);
+    expect(updated.name).toBe('Renomeado');
+    expect(updated.created_at).toBe(before.created_at);
+  });
+
+  it('recusa atualização de id inexistente com 404', async () => {
+    await expect(mockUpdateProject('nao-existe', newProjectInput())).rejects.toSatisfy(
+      (error: unknown) => isHttpError(error) && error.status === 404
     );
-
-    expect(prazoHoje).not.toHaveLength(0);
-    expect(prazoHoje.every((project) => !isLate(project))).toBe(true);
-  });
-
-  it('inclui projeto com orçamento zero, de consumo indisponível (RN07)', async () => {
-    const projects = await mockListProjects();
-    const semOrcamento = projects.filter((project) => project.budget === 0);
-
-    expect(semOrcamento).not.toHaveLength(0);
-    expect(semOrcamento.every((project) => budgetConsumptionPercent(project) === null)).toBe(true);
-  });
-
-  it('inclui projeto com orçamento excedido (RN03)', async () => {
-    const projects = await mockListProjects();
-
-    expect(projects.some(isOverBudget)).toBe(true);
-  });
-
-  it('mantém a integridade das três FKs de cada projeto', async () => {
-    const [projects, clients, teams, users] = await Promise.all([
-      mockListProjects(),
-      mockListClients(),
-      mockListTeams(),
-      mockListUsers(),
-    ]);
-    const clientIds = new Set(clients.map((client) => client.id));
-    const teamIds = new Set(teams.map((team) => team.id));
-    const userIds = new Set(users.map((user) => user.id));
-
-    for (const project of projects) {
-      expect(clientIds).toContain(project.clientId);
-      expect(teamIds).toContain(project.teamId);
-      expect(userIds).toContain(project.managerId);
-    }
   });
 });
 
-describe('escrita em memória', () => {
-  it('cria projeto com id e timestamps próprios e o inclui na listagem', async () => {
-    const antes = (await mockListProjects()).length;
-
-    const criado = await mockCreateProject(newProjectInput());
-    const depois = await mockListProjects();
-
-    expect(criado.id).toBeTruthy();
-    expect(criado.createdAt).toBeTruthy();
-    expect(depois).toHaveLength(antes + 1);
-    expect(depois.some((project) => project.id === criado.id)).toBe(true);
-  });
-
-  it('atualiza mantendo o id e devolve o projeto alterado', async () => {
-    const atualizado = await mockUpdateProject('prj-01', {
-      ...newProjectInput(),
-      name: 'Nome Atualizado',
-    });
-
-    expect(atualizado.id).toBe('prj-01');
-    expect(atualizado.name).toBe('Nome Atualizado');
-    expect((await mockGetProject('prj-01')).name).toBe('Nome Atualizado');
-  });
-
-  it('resetMockStore devolve o estado ao seed', async () => {
-    await mockCreateProject(newProjectInput());
-    const comExtra = (await mockListProjects()).length;
-
-    resetMockStore();
-
-    expect((await mockListProjects()).length).toBe(comExtra - 1);
-  });
-
-  it('busca por id inexistente falha como 404 tratado', async () => {
-    const error = await mockGetProject('prj-inexistente').catch((e: unknown) => e);
-
-    expect(isHttpError(error)).toBe(true);
-    expect(error).toMatchObject({ status: 404 });
-  });
-});
-
-describe('cenários do mock (ADR-0001: simular vazio e erro)', () => {
-  it('cenário vazio devolve listas vazias', async () => {
+describe('cenários de tela', () => {
+  it('vazio devolve listas vazias e 404 na busca por id', async () => {
     vi.stubEnv('VITE_MOCK_SCENARIO', 'vazio');
 
     expect(await mockListProjects()).toEqual([]);
     expect(await mockListClients()).toEqual([]);
-    expect(await mockListTeams()).toEqual([]);
-    expect(await mockListUsers()).toEqual([]);
+    await expect(mockGetProject('qualquer')).rejects.toSatisfy(
+      (error: unknown) => isHttpError(error) && error.status === 404
+    );
   });
 
-  it('cenário vazio faz a busca por id responder 404', async () => {
-    vi.stubEnv('VITE_MOCK_SCENARIO', 'vazio');
-
-    await expect(mockGetProject('prj-01')).rejects.toMatchObject({ status: 404 });
-  });
-
-  it('cenário erro falha com HttpError 500, igual à API real', async () => {
+  it('erro falha com HttpError, do mesmo tipo da API real', async () => {
     vi.stubEnv('VITE_MOCK_SCENARIO', 'erro');
 
-    const error = await mockListProjects().catch((e: unknown) => e);
-
-    expect(isHttpError(error)).toBe(true);
-    expect(error).toMatchObject({ kind: 'server', status: 500 });
-  });
-
-  it('valor desconhecido cai no cenário padrão', async () => {
-    vi.stubEnv('VITE_MOCK_SCENARIO', 'qualquer-coisa');
-
-    expect((await mockListProjects()).length).toBeGreaterThan(0);
+    await expect(mockListProjects()).rejects.toSatisfy(
+      (error: unknown) => isHttpError(error) && error.status === 500
+    );
   });
 });

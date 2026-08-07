@@ -10,7 +10,7 @@ import type { Client, ClientInput } from '@/types/client';
 
 const RESOURCE_PATH = '/clients';
 
-interface ClientDto {
+export interface ClientDto {
   id: string;
   name: string;
   created_at: string;
@@ -19,14 +19,14 @@ interface ClientDto {
 
 export function listClients(options?: RequestOptions): Promise<Client[]> {
   if (isMockEnabled()) {
-    return mockListClients();
+    return mockListClients().then((dtos) => dtos.map(toClient));
   }
   return httpGet<ClientDto[]>(RESOURCE_PATH, options).then((dtos) => dtos.map(toClient));
 }
 
 export function createClient(input: ClientInput, options?: RequestOptions): Promise<Client> {
   if (isMockEnabled()) {
-    return mockCreateClient(input);
+    return mockCreateClient(input).then(toClient);
   }
   return httpPost<ClientDto>(RESOURCE_PATH, { name: input.name }, options).then(toClient);
 }

@@ -27,7 +27,7 @@ Valores para role: GERENTE, COORDENADOR e GESTOR_PROJETO.
 | Campo | Tipo PostgreSQL | Restricao |
 |---|---|---|
 | id | UUID | PK |
-| name | VARCHAR(150) | NOT NULL |
+| name | VARCHAR(150) | NOT NULL, UNIQUE |
 | created_at | TIMESTAMP | NOT NULL |
 | updated_at | TIMESTAMP | NOT NULL |
 
@@ -36,7 +36,7 @@ Valores para role: GERENTE, COORDENADOR e GESTOR_PROJETO.
 | Campo | Tipo PostgreSQL | Restricao |
 |---|---|---|
 | id | UUID | PK |
-| name | VARCHAR(100) | NOT NULL |
+| name | VARCHAR(100) | NOT NULL, UNIQUE |
 | created_at | TIMESTAMP | NOT NULL |
 
 ## 6. Tabela projects
@@ -97,6 +97,10 @@ A tabela PROJECTS concentra as chaves estrangeiras client_id, manager_id e team_
 ## 10.1 Pendencia de padronizacao
 
 As tabelas clients e projects possuem created_at e updated_at; users e teams possuem apenas created_at. O frontend nao depende desses campos, portanto a padronizacao e decisao do backend. Registrado em docs/decisions/ADR-0004.
+
+## 10.2 Unicidade de nome em clients e teams
+
+clients.name e teams.name receberam UNIQUE. O nome e a unica propriedade que distingue esses cadastros na interface e nos agregados por cliente do RF08: dois clientes com o mesmo nome produzem duas barras indistinguiveis no grafico e duas opcoes iguais no seletor de projeto. O frontend ja recusa o nome repetido no cadastro, mas essa verificacao e conveniencia, nao garantia — a restricao no banco continua sendo necessaria. Registrado em docs/decisions/ADR-0006.
 
 ## 11. Decisoes de Escopo
 

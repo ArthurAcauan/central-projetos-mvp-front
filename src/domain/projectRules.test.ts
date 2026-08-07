@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isProjectValid,
   projectWarnings,
+  toProjectInput,
   validateProject,
   type ProjectFormValues,
 } from '@/domain/projectRules';
@@ -137,5 +138,47 @@ describe('estouro de orçamento (RN03, armadilha A-003)', () => {
 
   it('não avisa com campo ainda em branco', () => {
     expect(projectWarnings(makeValues({ budget: null, budgetSpent: 10 }))).toEqual([]);
+  });
+});
+
+describe('conversão para o payload de cadastro/edição (RF03, RF06)', () => {
+  it('devolve o projeto em camelCase, com os números já resolvidos', () => {
+    expect(toProjectInput(makeValues())).toEqual({
+      name: 'Portal do Cliente',
+      clientId: 'c1',
+      objective: 'Centralizar o atendimento em um canal único.',
+      managerId: 'u1',
+      teamId: 't1',
+      startDate: '2026-01-01',
+      deadline: '2026-12-31',
+      budget: 100_000,
+      budgetSpent: 25_000,
+      hoursWorked: 120,
+      status: 'EM_ANDAMENTO',
+      observations: null,
+    });
+  });
+
+  it('apara espaços dos textos livres', () => {
+    const input = toProjectInput(
+      makeValues({ name: '  Portal  ', objective: ' Objetivo ', observations: '  Nota  ' })
+    );
+
+    expect(input).toMatchObject({ name: 'Portal', objective: 'Objetivo', observations: 'Nota' });
+  });
+
+  it('trata observação só com espaços como ausência, não como texto vazio', () => {
+    expect(toProjectInput(makeValues({ observations: '   ' }))?.observations).toBeNull();
+  });
+
+  it('converte o projeto com estouro de orçamento, que é válido (RN03)', () => {
+    expect(toProjectInput(makeValues({ budget: 100, budgetSpent: 500 }))).not.toBeNull();
+  });
+
+  it('devolve null exatamente quando a validação acusa erro', () => {
+    expect(toProjectInput(makeValues({ clientId: '' }))).toBeNull();
+    expect(toProjectInput(makeValues({ budget: null }))).toBeNull();
+    expect(toProjectInput(makeValues({ status: '' }))).toBeNull();
+    expect(toProjectInput(makeValues({ hoursWorked: -1 }))).toBeNull();
   });
 });

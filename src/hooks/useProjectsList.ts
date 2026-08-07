@@ -1,10 +1,11 @@
 /**
  * Carrega os dados da consulta de projetos (RF04).
  *
- * A lista precisa de três recursos: os projetos e, para exibir nome em vez de
- * UUID, os clientes e os usuários. Vão juntos em uma única chamada de hook
- * porque a tela só é útil com os três — mostrar a tabela com "cli-01" no lugar
- * do cliente seria pior do que esperar.
+ * Desde a integração (ADR-0007) o projeto já chega com cliente, gestor e equipe
+ * resolvidos, então a lista não precisa mais cruzar três recursos para exibir
+ * nome. Os clientes continuam vindo por um motivo diferente: alimentar o
+ * `<select>` do filtro, que precisa oferecer também o cliente que ainda não tem
+ * projeto nenhum.
  *
  * Orquestração de dados vive aqui, não na página: a página recebe estado pronto
  * e não sabe que existe HTTP (ADR-0002).
@@ -14,10 +15,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { listClients } from '@/services/clients';
 import { isHttpError } from '@/services/http';
 import { listProjects } from '@/services/projects';
-import { listUsers } from '@/services/users';
 import type { Client } from '@/types/client';
-import type { Project } from '@/types/project';
-import type { User } from '@/types/user';
+import type { ProjectSummary } from '@/types/project';
 
 const FALLBACK_ERROR = 'Não foi possível carregar os projetos. Tente novamente.';
 
@@ -28,22 +27,21 @@ const FALLBACK_ERROR = 'Não foi possível carregar os projetos. Tente novamente
  */
 type LoadState =
   | { status: 'loading' }
-  | { status: 'ready'; projects: Project[]; clients: Client[]; users: User[] }
+  | { status: 'ready'; projects: ProjectSummary[]; clients: Client[] }
   | { status: 'error'; message: string };
 
 const LOADING: LoadState = { status: 'loading' };
 
 /** Listas vazias enquanto carrega ou depois de falhar — nunca dado pela metade. */
-const NO_DATA: Pick<ProjectsListState, 'projects' | 'clients' | 'users'> = {
+const NO_DATA: Pick<ProjectsListState, 'projects' | 'clients'> = {
   projects: [],
   clients: [],
-  users: [],
 };
 
 export interface ProjectsListState {
-  projects: Project[];
+  projects: ProjectSummary[];
+  /** Só para o filtro por cliente; o nome exibido vem de dentro do projeto. */
   clients: Client[];
-  users: User[];
   isLoading: boolean;
   /** Mensagem pronta para exibição, ou `null` quando a carga deu certo. */
   error: string | null;
@@ -64,10 +62,12 @@ export function useProjectsList(): ProjectsListState {
     const options = { signal: controller.signal };
     let active = true;
 
-    Promise.all([listProjects(options), listClients(options), listUsers(options)])
-      .then(([projects, clients, users]) => {
+    // Sem filtro na query: o recorte acontece no cliente, para a busca textual
+    // e os dois `<select>` se comportarem igual (ver `domain/projectFilters`).
+    Promise.all([listProjects({}, options), listClients(options)])
+      .then(([projects, clients]) => {
         if (active) {
-          setState({ status: 'ready', projects, clients, users });
+          setState({ status: 'ready', projects, clients });
         }
       })
       .catch((cause: unknown) => {
@@ -94,7 +94,6 @@ export function useProjectsList(): ProjectsListState {
   return {
     projects: data.projects,
     clients: data.clients,
-    users: data.users,
     isLoading: state.status === 'loading',
     error: state.status === 'error' ? state.message : null,
     reload,

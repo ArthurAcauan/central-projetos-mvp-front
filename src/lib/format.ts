@@ -21,6 +21,13 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 0,
 });
 
+const compactCurrencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
 const dateFormatter = new Intl.DateTimeFormat('pt-BR');
 
 const integerFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
@@ -56,6 +63,30 @@ export function formatPercent(value: number | null): string {
     return EMPTY_VALUE;
   }
   return `${value.toFixed(1).replace('.', ',')}%`;
+}
+
+/**
+ * Reais abreviados — "R$ 1,2 mi", "R$ 480 mil". Existe para o eixo dos gráficos
+ * (RF08), onde `formatCurrency` produziria rótulos que se sobrepõem. Use só em
+ * eixo e legenda; em tabela e card o valor vai por extenso.
+ */
+export function formatCompactCurrency(value: number): string {
+  return compactCurrencyFormatter.format(value);
+}
+
+/**
+ * Timestamp ISO completo (`createdAt`) → `dd/mm/aaaa`.
+ *
+ * Aqui `new Date(value)` é correto, ao contrário de `formatDate`: o valor traz
+ * fuso e representa um instante, não uma data de calendário. É a diferença que
+ * a armadilha A-002 cobra — `deadline` não tem hora e não pode passar por aqui.
+ */
+export function formatTimestamp(value: string | null | undefined): string {
+  if (!value) {
+    return EMPTY_VALUE;
+  }
+  const instant = new Date(value);
+  return Number.isNaN(instant.getTime()) ? EMPTY_VALUE : dateFormatter.format(instant);
 }
 
 /** Quantidades inteiras com separador de milhar (horas, contagens). */

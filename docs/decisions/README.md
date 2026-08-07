@@ -26,3 +26,6 @@ Não vale ADR para escolha de nome de variável, layout de tela ou detalhe de im
 | [0003](ADR-0003-ui-tailwind-em-vez-de-mui.md) | Tailwind CSS v4 como camada de UI, em vez de MUI | Aceito |
 | [0004](ADR-0004-refinamento-das-regras-de-negocio.md) | Refinamento das regras de negócio e requisitos (RN07–RN09, RF03, RNF03) | Aceito |
 | [0005](ADR-0005-camada-lib-de-formatacao.md) | Formatação pt-BR em `src/lib/`, separada de `domain/` | Aceito |
+| [0006](ADR-0006-unicidade-de-nome-nos-cadastros.md) | Nome único em clientes e equipes | Aceito |
+| [0007](ADR-0007-indicadores-vem-do-backend.md) | Indicadores calculados pelo backend, e RN09 redefinido | Aceito |
+| [0008](ADR-0008-mock-vira-fixture-de-resposta-real.md) | A camada mock passa a servir respostas reais gravadas | Aceito |

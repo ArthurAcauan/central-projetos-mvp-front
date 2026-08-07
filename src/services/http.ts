@@ -65,8 +65,11 @@ const MESSAGE_BY_STATUS: Record<number, string> = {
   401: 'Sem permissão para acessar este recurso.',
   403: 'Sem permissão para acessar este recurso.',
   404: 'Recurso não encontrado.',
-  409: 'Este registro já foi alterado por outra operação. Recarregue e tente de novo.',
+  // No contrato, 409 é duplicidade — e-mail ou nome já cadastrado —, não
+  // concorrência. A API manda o texto exato; esta é a reserva.
+  409: 'Já existe um registro com estes dados.',
   422: 'Dados inválidos. Revise as informações e tente novamente.',
+  503: 'Banco de dados indisponível no momento. Tente novamente.',
 };
 
 export function httpGet<T>(path: string, options?: RequestOptions): Promise<T> {
@@ -85,7 +88,48 @@ export function httpDelete<T>(path: string, options?: RequestOptions): Promise<T
   return request<T>('DELETE', path, undefined, options);
 }
 
+/**
+ * O banco do backend hiberna por inatividade (Neon free tier). A primeira
+ * chamada depois de um tempo parado pode demorar ~1,5 s e às vezes responder
+ * `503` — não é falha real, é a instância acordando.
+ *
+ * A repetição vale **só para `GET`**: em leitura, repetir não tem efeito
+ * colateral. Em `POST`/`PUT` não dá para afirmar, a partir de um `503`, que a
+ * escrita não chegou ao banco — e cadastrar o mesmo projeto duas vezes é pior
+ * do que mostrar o erro e deixar a pessoa decidir.
+ */
+const RETRYABLE_STATUS = 503;
+const RETRY_DELAY_MS = 1_000;
+
 async function request<T>(
+  method: string,
+  path: string,
+  body: unknown,
+  options: RequestOptions = {}
+): Promise<T> {
+  try {
+    return await attempt<T>(method, path, body, options);
+  } catch (error) {
+    if (method !== 'GET' || !isRetryable(error) || options.signal?.aborted) {
+      throw error;
+    }
+    await delay(RETRY_DELAY_MS);
+    if (options.signal?.aborted) {
+      throw error;
+    }
+    return attempt<T>(method, path, body, options);
+  }
+}
+
+function isRetryable(error: unknown): boolean {
+  return isHttpError(error) && error.status === RETRYABLE_STATUS;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function attempt<T>(
   method: string,
   path: string,
   body: unknown,
@@ -214,12 +258,37 @@ function messageFor(status: number, body: unknown): string {
     : 'Não foi possível concluir a operação.';
 }
 
+/**
+ * Formato de erro do contrato: `{ erro, detalhes?: string[] }`.
+ *
+ * `detalhes` só aparece em erro de validação e já vem legível campo a campo
+ * ("client_id: é obrigatório e deve ser texto"), então tem prioridade sobre a
+ * mensagem genérica — é o que diz ao usuário **qual** campo corrigir.
+ *
+ * `message`/`error` continuam sendo lidos como reserva, para o front não ficar
+ * mudo se algum intermediário responder em outro formato.
+ */
 function extractApiMessage(body: unknown): string | null {
   if (typeof body !== 'object' || body === null) {
     return null;
   }
-  const candidate = body as { message?: unknown; error?: unknown };
-  for (const value of [candidate.message, candidate.error]) {
+  const candidate = body as {
+    erro?: unknown;
+    detalhes?: unknown;
+    message?: unknown;
+    error?: unknown;
+  };
+
+  if (Array.isArray(candidate.detalhes)) {
+    const details = candidate.detalhes.filter(
+      (detail): detail is string => typeof detail === 'string' && detail.trim() !== ''
+    );
+    if (details.length > 0) {
+      return details.join('\n');
+    }
+  }
+
+  for (const value of [candidate.erro, candidate.message, candidate.error]) {
     if (typeof value === 'string' && value.trim() !== '') {
       return value.trim();
     }

@@ -33,6 +33,11 @@ describe('casca da aplicacao', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
   });
 
+  it('resolve /projects/new como cadastro, e nao como detalhe de id "new"', () => {
+    renderAt('/projects/new');
+    expect(screen.getByRole('heading', { name: 'Novo projeto' })).toBeInTheDocument();
+  });
+
   it('redireciona rota desconhecida para o dashboard', () => {
     renderAt('/rota-inexistente');
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();

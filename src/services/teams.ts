@@ -12,7 +12,7 @@ import type { Team, TeamInput } from '@/types/team';
 
 const RESOURCE_PATH = '/teams';
 
-interface TeamDto {
+export interface TeamDto {
   id: string;
   name: string;
   created_at: string;
@@ -20,14 +20,14 @@ interface TeamDto {
 
 export function listTeams(options?: RequestOptions): Promise<Team[]> {
   if (isMockEnabled()) {
-    return mockListTeams();
+    return mockListTeams().then((dtos) => dtos.map(toTeam));
   }
   return httpGet<TeamDto[]>(RESOURCE_PATH, options).then((dtos) => dtos.map(toTeam));
 }
 
 export function createTeam(input: TeamInput, options?: RequestOptions): Promise<Team> {
   if (isMockEnabled()) {
-    return mockCreateTeam(input);
+    return mockCreateTeam(input).then(toTeam);
   }
   return httpPost<TeamDto>(RESOURCE_PATH, { name: input.name }, options).then(toTeam);
 }
